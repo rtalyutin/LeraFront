@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Салон · диспетчерская</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <div><span class="eyebrow">Диспетчерская салона</span><h1>Сегодня без накладок</h1></div>
+    <div class="head-tools"><label>Дата <input id="day" type="date"></label><button id="reload">Обновить</button><button id="logout" hidden>Выйти</button></div>
+  </header>
+  <main>
+    <section id="auth" class="gate">
+      <div><span class="eyebrow">Защищённый вход</span><h2>Войдите в диспетчерскую</h2><p>Сессия хранится в недоступном JavaScript cookie и завершается на сервере по тайм-ауту.</p></div>
+      <form id="auth-form"><label>Логин<input id="username" autocomplete="username" required placeholder="admin"></label><label>Пароль<input id="password" type="password" autocomplete="current-password" required placeholder="Не менее 12 знаков"></label><button>Открыть календарь</button></form>
+    </section>
+
+    <section id="workspace" hidden>
+      <div class="status-strip">
+        <span><b id="booking-count">0</b> записей</span>
+        <span><b id="room-pressure">0%</b> загрузка кабинетов</span>
+        <span class="danger"><b id="issue-count">0</b> сбоев доставки</span>
+      </div>
+      <nav class="tabs" aria-label="Разделы">
+        <button class="active" data-tab="calendar">Календарь</button>
+        <button data-tab="manual">Новая запись</button>
+        <button data-tab="block">Блокировка</button>
+        <button data-tab="schedule">График</button>
+        <button data-tab="masters">Мастера</button>
+        <button data-tab="services">Услуги</button>
+      </nav>
+      <section id="calendar" class="tab-panel">
+        <div class="view-switch"><button class="active" data-view="masters">По мастерам</button><button data-view="rooms">По кабинетам</button></div>
+        <div id="lanes" class="lanes" aria-live="polite"></div>
+      </section>
+      <section id="manual" class="tab-panel" hidden>
+        <form id="booking-form" class="editor"><h2>Ручная запись</h2><label>Услуга<select name="service_id" required></select></label><label>Мастер<select name="master_id" required></select></label><label>Начало<input name="start" type="datetime-local" required></label><label>Телефон<input name="phone" inputmode="tel" placeholder="+79990000000" required></label><button>Проверить и записать</button></form>
+      </section>
+      <section id="block" class="tab-panel" hidden>
+        <form id="block-form" class="editor"><h2>Закрыть ресурс</h2><label>Тип<select name="resource_kind"><option value="master">Мастер</option><option value="room">Кабинет</option></select></label><label>Ресурс<select name="resource_id" required></select></label><label>С<input name="start" type="datetime-local" required></label><label>До<input name="end" type="datetime-local" required></label><label>Причина<input name="reason" placeholder="Обучение / ремонт"></label><button>Проверить и закрыть</button></form>
+      </section>
+      <section id="schedule" class="tab-panel" hidden>
+        <form id="schedule-form" class="editor"><h2>Недельный график</h2>
+          <label>Тип<select name="resource_kind"><option value="master">Мастер</option><option value="room">Кабинет</option></select></label>
+          <label>Ресурс<select name="resource_id" required></select></label>
+          <label>День недели<select name="weekday"><option value="0">Понедельник</option><option value="1">Вторник</option><option value="2">Среда</option><option value="3">Четверг</option><option value="4">Пятница</option><option value="5">Суббота</option><option value="6">Воскресенье</option></select></label>
+          <label>Начало<input name="start" type="time" value="09:00" required></label>
+          <label>Конец<input name="end" type="time" value="18:00" required></label>
+          <label><input name="closed" type="checkbox"> Выходной</label>
+          <button>Применить к будущим датам</button>
+        </form>
+      </section>
+      <section id="masters" class="tab-panel" hidden>
+        <h2>Карточки мастеров</h2>
+        <p class="muted">Тестовые аватары. В сообщениях VK карточки появятся после загрузки изображений в тестовое сообщество.</p>
+        <div id="master-cards" class="master-cards"></div>
+      </section>
+      <section id="services" class="tab-panel" hidden><div id="service-list" class="service-list"></div></section>
+      <aside id="toast" class="toast" hidden></aside>
+    </section>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>

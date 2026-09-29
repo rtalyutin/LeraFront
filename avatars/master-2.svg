@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Тестовый аватар мастера 2">
+  <rect width="512" height="512" fill="#1e1b1d"/>
+  <path d="M0 104L512 0v106L0 210ZM0 412l512-106v106L0 512Z" fill="#ffb08b" opacity=".18"/>
+  <circle cx="256" cy="256" r="184" fill="#ffb08b"/>
+  <circle cx="256" cy="256" r="162" fill="none" stroke="#1e1b1d" stroke-width="3"/>
+  <text x="256" y="333" fill="#1e1b1d" font-family="Arial,sans-serif" font-weight="900" font-size="226" text-anchor="middle">2</text>
+  <text x="256" y="458" fill="#fffaf3" font-family="Arial,sans-serif" font-weight="700" font-size="24" letter-spacing="5" text-anchor="middle">TEST MASTER</text>
+</svg>
