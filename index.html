@@ -20,46 +20,62 @@
     <section id="workspace" hidden>
       <div class="status-strip">
         <span><b id="booking-count">0</b> записей</span>
-        <span><b id="room-pressure">0%</b> загрузка кабинетов</span>
+        <span><b id="room-pressure">0%</b> занято от часов графика кабинетов</span>
         <span class="danger"><b id="issue-count">0</b> сбоев доставки</span>
       </div>
       <nav class="tabs" aria-label="Разделы">
         <button class="active" data-tab="calendar">Календарь</button>
         <button data-tab="manual">Новая запись</button>
         <button data-tab="block">Блокировка</button>
-        <button data-tab="schedule">График</button>
-        <button data-tab="masters">Мастера</button>
-        <button data-tab="services">Услуги</button>
+        <button data-tab="constructor">Конструктор салона</button>
       </nav>
       <section id="calendar" class="tab-panel">
+        <div id="setup-summary" class="setup-summary"></div>
         <div class="view-switch"><button class="active" data-view="masters">По мастерам</button><button data-view="rooms">По кабинетам</button></div>
         <div id="lanes" class="lanes" aria-live="polite"></div>
       </section>
       <section id="manual" class="tab-panel" hidden>
-        <form id="booking-form" class="editor"><h2>Ручная запись</h2><label>Услуга<select name="service_id" required></select></label><label>Мастер<select name="master_id" required></select></label><label>Начало<input name="start" type="datetime-local" required></label><label>Телефон<input name="phone" inputmode="tel" placeholder="+79990000000" required></label><button>Проверить и записать</button></form>
+        <form id="booking-form" class="editor"><h2>Ручная запись</h2><p class="full-width muted">Часовой пояс салона: <b class="salon-zone"></b></p><label>Услуга<select name="service_id" required></select></label><label>Мастер<select name="master_id" required></select></label><label>Начало<input name="start" type="datetime-local" required></label><label>Телефон<input name="phone" inputmode="tel" placeholder="+79990000000" required></label><button>Проверить и записать</button></form>
       </section>
       <section id="block" class="tab-panel" hidden>
-        <form id="block-form" class="editor"><h2>Закрыть ресурс</h2><label>Тип<select name="resource_kind"><option value="master">Мастер</option><option value="room">Кабинет</option></select></label><label>Ресурс<select name="resource_id" required></select></label><label>С<input name="start" type="datetime-local" required></label><label>До<input name="end" type="datetime-local" required></label><label>Причина<input name="reason" placeholder="Обучение / ремонт"></label><button>Проверить и закрыть</button></form>
+        <form id="block-form" class="editor"><h2>Закрыть ресурс</h2><p class="full-width muted">Часовой пояс салона: <b class="salon-zone"></b></p><label>Тип<select name="resource_kind"><option value="master">Мастер</option><option value="room">Кабинет</option></select></label><label>Ресурс<select name="resource_id" required></select></label><label>С<input name="start" type="datetime-local" required></label><label>До<input name="end" type="datetime-local" required></label><label>Причина<input name="reason" placeholder="Обучение / ремонт"></label><button>Проверить и закрыть</button></form>
       </section>
-      <section id="schedule" class="tab-panel" hidden>
-        <form id="schedule-form" class="editor"><h2>Недельный график</h2>
+      <section id="constructor" class="tab-panel" hidden>
+        <div class="builder-head"><span class="eyebrow">Соберите свой салон</span><h2>Вы задаёте, кто, где и когда принимает</h2><p>Создайте услуги, назначьте их мастерам и кабинетам, затем задайте рабочие часы. Доступное время записи рассчитывается по этим настройкам.</p></div>
+        <nav class="builder-nav" aria-label="Части конструктора">
+          <button class="active" data-build="builder-services">1 · Услуги</button>
+          <button data-build="builder-masters">2 · Мастера</button>
+          <button data-build="builder-rooms">3 · Кабинеты</button>
+          <button data-build="builder-schedule">4 · Рабочие часы</button>
+        </nav>
+        <section id="builder-services" class="builder-panel">
+          <form id="service-create" class="editor"><h2>Добавить услугу</h2><label>Название<input name="name" maxlength="160" required></label><label>Длительность, минут<input name="duration_minutes" type="number" min="1" max="1440" step="1" required></label><button>Добавить услугу</button></form>
+          <div id="service-list" class="service-list"></div>
+        </section>
+        <section id="builder-masters" class="builder-panel" hidden>
+          <form id="master-create" class="editor resource-create" data-kind="master"><h2>Добавить мастера</h2><label>Имя<input name="name" maxlength="160" required></label><fieldset class="service-choices"><legend>Какие услуги оказывает</legend><div data-service-choices></div></fieldset><button>Добавить мастера</button></form>
+          <div id="master-cards" class="resource-list"></div>
+        </section>
+        <section id="builder-rooms" class="builder-panel" hidden>
+          <form id="room-create" class="editor resource-create" data-kind="room"><h2>Добавить кабинет</h2><label>Название<input name="name" maxlength="160" required></label><fieldset class="service-choices"><legend>Какие услуги доступны в кабинете</legend><div data-service-choices></div></fieldset><button>Добавить кабинет</button></form>
+          <div id="room-cards" class="resource-list"></div>
+        </section>
+        <section id="builder-schedule" class="builder-panel" hidden>
+        <form id="schedule-form" class="editor"><h2>Рабочие часы</h2>
           <label>Тип<select name="resource_kind"><option value="master">Мастер</option><option value="room">Кабинет</option></select></label>
           <label>Ресурс<select name="resource_id" required></select></label>
           <label>День недели<select name="weekday"><option value="0">Понедельник</option><option value="1">Вторник</option><option value="2">Среда</option><option value="3">Четверг</option><option value="4">Пятница</option><option value="5">Суббота</option><option value="6">Воскресенье</option></select></label>
-          <label>Начало<input name="start" type="time" value="09:00" required></label>
-          <label>Конец<input name="end" type="time" value="18:00" required></label>
-          <label><input name="closed" type="checkbox"> Выходной</label>
+          <label class="choice"><input name="closed" type="checkbox"> Выходной</label>
+          <div id="schedule-intervals" class="schedule-intervals"></div>
+          <button type="button" id="add-interval">Добавить рабочий интервал</button>
+          <p class="muted full-width">Время указано в часовом поясе салона: <b id="schedule-zone"></b>. Для перерыва оставьте промежуток между интервалами. 24:00 означает конец дня. Начало записи — каждые 30 минут.</p>
           <button>Применить к будущим датам</button>
         </form>
+        <div id="schedule-overview" class="schedule-overview"></div>
+        </section>
       </section>
-      <section id="masters" class="tab-panel" hidden>
-        <h2>Карточки мастеров</h2>
-        <p class="muted">Тестовые аватары. В сообщениях VK карточки появятся после загрузки изображений в тестовое сообщество.</p>
-        <div id="master-cards" class="master-cards"></div>
-      </section>
-      <section id="services" class="tab-panel" hidden><div id="service-list" class="service-list"></div></section>
-      <aside id="toast" class="toast" hidden></aside>
     </section>
+    <aside id="toast" class="toast" role="status" aria-live="polite" hidden></aside>
   </main>
   <script src="/app.js" defer></script>
 </body>
