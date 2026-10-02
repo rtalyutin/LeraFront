@@ -9,7 +9,7 @@
 <body>
   <header class="masthead">
     <div><span class="eyebrow">Диспетчерская салона</span><h1>Сегодня без накладок</h1></div>
-    <div class="head-tools"><label>Дата <input id="day" type="date"></label><button id="reload">Обновить</button><button id="logout" hidden>Выйти</button></div>
+    <div class="head-tools"><label id="salon-picker" hidden>Салон <select id="salon-select" aria-label="Текущий салон"></select></label><label>Дата <input id="day" type="date"></label><button id="reload">Обновить</button><button id="logout" hidden>Выйти</button></div>
   </header>
   <main>
     <section id="auth" class="gate">
@@ -18,6 +18,7 @@
     </section>
 
     <section id="workspace" hidden>
+      <p id="workspace-status" class="muted" role="status" aria-live="polite" hidden></p>
       <div class="status-strip">
         <span><b id="booking-count">0</b> записей</span>
         <span><b id="room-pressure">0%</b> занято от часов графика кабинетов</span>
@@ -47,6 +48,7 @@
           <button data-build="builder-masters">2 · Мастера</button>
           <button data-build="builder-rooms">3 · Кабинеты</button>
           <button data-build="builder-schedule">4 · Рабочие часы</button>
+          <button data-build="builder-data">5 · Свои справочники и поля</button>
         </nav>
         <section id="builder-services" class="builder-panel">
           <form id="service-create" class="editor"><h2>Добавить услугу</h2><label>Название<input name="name" maxlength="160" required></label><label>Длительность, минут<input name="duration_minutes" type="number" min="1" max="1440" step="1" required></label><button>Добавить услугу</button></form>
@@ -54,6 +56,7 @@
         </section>
         <section id="builder-masters" class="builder-panel" hidden>
           <form id="master-create" class="editor resource-create" data-kind="master"><h2>Добавить мастера</h2><label>Имя<input name="name" maxlength="160" required></label><fieldset class="service-choices"><legend>Какие услуги оказывает</legend><div data-service-choices></div></fieldset><button>Добавить мастера</button></form>
+          <form id="master-attach" class="editor spaced-editor"><h2>Мастер из другого вашего салона</h2><p class="muted full-width">Подключите уже известного мастера и выберите услуги, которые он оказывает здесь.</p><p id="shared-master-status" class="muted full-width" role="status"></p><label class="full-width">Мастер<select name="shared_master" required></select></label><fieldset class="service-choices"><legend>Услуги в этом салоне</legend><div data-service-choices></div></fieldset><button disabled>Подключить мастера</button></form>
           <div id="master-cards" class="resource-list"></div>
         </section>
         <section id="builder-rooms" class="builder-panel" hidden>
@@ -72,6 +75,19 @@
           <button>Применить к будущим датам</button>
         </form>
         <div id="schedule-overview" class="schedule-overview"></div>
+        </section>
+        <section id="builder-data" class="builder-panel" hidden>
+          <div class="builder-head"><h2>Ваши справочники и дополнительные поля</h2><p>Добавляйте нужные салону сведения: например, материалы и их остатки или предпочтения клиентов. Основные услуги, мастера и кабинеты создаются в соседних разделах; здесь можно заполнить их дополнительные поля.</p></div>
+          <p id="metadata-status" class="muted" role="status" aria-live="polite"></p>
+          <form id="metadata-type-create" class="editor"><h2>Новый справочник</h2><label>Название<input name="label" maxlength="200" required placeholder="Например, материалы"></label><label>Короткое имя, латиницей<input name="code" maxlength="64" pattern="[a-z][a-z0-9_]{0,63}" required placeholder="materials"></label><button>Добавить справочник</button></form>
+          <div id="metadata-content" hidden>
+            <label class="metadata-picker">Справочник<select id="metadata-type"></select></label>
+            <form id="metadata-parameter-create" class="editor"><h2>Добавить поле</h2><label>Название поля<input name="label" maxlength="200" required></label><label>Короткое имя, латиницей<input name="code" maxlength="64" pattern="[a-z][a-z0-9_]{0,63}" required placeholder="stock"></label><label>Что хранится<select name="data_type"><option value="string">Текст</option><option value="integer">Целое число</option><option value="number">Число</option><option value="boolean">Да или нет</option><option value="date">Дата</option><option value="reference">Запись из справочника</option></select></label><label class="reference-target" hidden>Из какого справочника<select name="reference_type_id"></select></label><label class="choice"><input name="required" type="checkbox"> Обязательно заполнять</label><button>Добавить поле</button></form>
+            <div id="metadata-parameters" class="service-list"></div>
+            <p id="metadata-core-note" class="muted" hidden>Основные сведения меняются в разделах услуг, мастеров и кабинетов. Здесь доступны дополнительные поля.</p>
+            <form id="metadata-entity-create" class="editor spaced-editor" hidden><h2>Добавить запись</h2><div id="metadata-new-fields" class="metadata-fields full-width"></div><button>Добавить запись</button></form>
+            <div id="metadata-entities" class="resource-list"></div>
+          </div>
         </section>
       </section>
     </section>

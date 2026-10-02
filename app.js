@@ -3,19 +3,35 @@ const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const esc = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const fmt = n => String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
 const weekdays=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-let data=null, view='masters', csrf='';
+let data=null, view='masters', csrf='', session=null, salonId='', salonRevision=0, snapshotRevision=0;
+let metadata=null, sharedMasters=[], extrasRevision=0;
+const salonRequests=new Set();
+const publicApi=new Set(['/api/login','/api/logout','/api/session','/api/salons']);
+const context=()=>({salonId,revision:salonRevision});
+const isCurrent=scope=>scope.salonId===salonId&&scope.revision===salonRevision;
+const stale=()=>new DOMException('Запрос относится к другому салону.','AbortError');
+const report=e=>{if(e.name!=='AbortError')show(e.message,true);};
 const show=(message,error=false)=>{const t=$('#toast');t.textContent=message;t.className='toast'+(error?' error':'');t.hidden=false;setTimeout(()=>t.hidden=true,7000);};
 async function api(path,options={}) {
-  const method=(options.method||'GET').toUpperCase(),headers={...options.headers};
+  const {scope=context(),...fetchOptions}=options;
+  const scoped=!publicApi.has(path.split('?')[0]);
+  if(scoped&&(!salonId||!isCurrent(scope)))throw stale();
+  const controller=scoped?new AbortController():null;
+  if(controller)salonRequests.add(controller);
+  const method=(fetchOptions.method||'GET').toUpperCase(),headers={...fetchOptions.headers};
   if(options.body!==undefined)headers['Content-Type']='application/json';
   if(method!=='GET'&&csrf)headers['X-CSRF-Token']=csrf;
-  const response=await fetch(path,{...options,headers}),body=await response.json();
-  if(!response.ok){const e=new Error(body.message||body.error);e.body=body;throw e;}
-  return body;
+  if(scoped)headers['X-Salon-Id']=scope.salonId;
+  try{
+    const response=await fetch(path,{...fetchOptions,headers,...(controller?{signal:controller.signal}:{})}),body=await response.json();
+    if(scoped&&!isCurrent(scope))throw stale();
+    if(!response.ok){const e=new Error(body.message||body.error||'Не удалось выполнить запрос.');e.body=body;throw e;}
+    return body;
+  }finally{if(controller)salonRequests.delete(controller);}
 }
 function options(select,rows) {
   const old=select.value;
-  select.innerHTML=rows.filter(x=>x.active!==0).map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join('');
+  select.innerHTML=rows.filter(x=>x.active!==0&&x.active!==false).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('');
   if([...select.options].some(o=>o.value===old))select.value=old;
 }
 function localParts(iso) {
@@ -92,8 +108,15 @@ function render() {
   $$('.salon-zone').forEach(el=>el.textContent=data.timezone);
   $('#schedule-overview').innerHTML=['master','room'].flatMap(kind=>data[kind+'s'].filter(r=>r.active).map(r=>'<article><strong>'+esc(r.name)+'</strong><p>'+weekdays.map((day,i)=>day+': '+(weekly(kind,r.id,i).map(w=>fmt(w.start_minute)+'–'+fmt(w.end_minute)).join(', ')||'выходной')).join('<br>')+'</p></article>')).join('');
 }
-async function load(){data=await api('/api/snapshot?date='+$('#day').value);render();}
+async function load(){
+  const scope=context(),revision=++snapshotRevision;
+  const snapshot=await api('/api/snapshot?date='+encodeURIComponent($('#day').value),{scope});
+  if(!isCurrent(scope)||revision!==snapshotRevision)throw stale();
+  data=snapshot;$$('#workspace button').forEach(b=>b.disabled=false);render();$('#workspace-status').hidden=true;
+  loadExtras(scope);
+}
 function updateBookingMasters(){
+  if(!data)return;
   const serviceId=+$('#booking-form [name=service_id]').value;
   options($('#booking-form [name=master_id]'),data.masters.filter(m=>(m.service_ids||[]).includes(serviceId)));
   $('#booking-form button').disabled=!$('#booking-form [name=master_id]').value;
@@ -128,46 +151,189 @@ function toggleScheduleTimes(){
 }
 function minutes(value){const [h,m]=value.split(':').map(Number);return h*60+m;}
 async function submitJson(form,path,transform,{canCancelAffected=false,reset=false}={}) {
+  if(!data)return;
+  const scope=context();
   const button=form.querySelector('button:not([type=button])');
   if(button?.disabled)return;
   let body;
   try{body=transform(Object.fromEntries(new FormData(form)));}catch(e){show(e.message,true);return;}
   if(button)button.disabled=true;
-  const send=()=>api(path,{method:'POST',body:JSON.stringify(body)});
+  const send=()=>api(path,{scope,method:'POST',body:JSON.stringify(body)});
   try{
     let result;
     try{result=await send();}catch(e){
       const ids=e.body?.affected_booking_ids;
       if(!canCancelAffected||!ids?.length)throw e;
+      if(!isCurrent(scope))throw stale();
       if(!window.confirm('Изменение отменит действующие записи №'+ids.join(', ')+'. Продолжить?'))return;
       body.acknowledge=true;result=await send();
     }
+    if(!isCurrent(scope))throw stale();
     const manual=result.manual_contact_booking_ids||[];
     show(manual.length?'Сохранено. Сообщите об отмене ручных записей №'+manual.join(', ')+'.':'Сохранено. Отменено записей: '+(result.cancelled_booking_ids||[]).length+'.');
     if(reset)form.reset();await load();
-  }catch(e){show(e.message+(e.body?.affected_booking_ids?.length?' · записи №'+e.body.affected_booking_ids.join(', '):''),true);}
-  finally{if(button)button.disabled=false;}
+  }catch(e){if(isCurrent(scope)&&e.name!=='AbortError')show(e.message+(e.body?.affected_booking_ids?.length?' · записи №'+e.body.affected_booking_ids.join(', '):''),true);}
+  finally{if(button&&isCurrent(scope))button.disabled=false;}
+}
+const dataTypes={string:'Текст',integer:'Целое число',number:'Число',boolean:'Да или нет',date:'Дата',reference:'Запись из справочника'};
+function selectedType(){return metadata?.types.find(t=>String(t.id)===$('#metadata-type').value);}
+function typeChoices(value=''){
+  return metadata.types.map(t=>'<option value="'+esc(t.id)+'" '+(String(t.id)===String(value)?'selected':'')+'>'+esc(t.label)+'</option>').join('');
+}
+function recordLabel(entity,type){
+  const first=type?.parameters.find(p=>p.data_type==='string'&&entity.values?.[p.code]);
+  return String(entity.values?.name||entity.values?.label||(first?entity.values[first.code]:'')||'Запись №'+entity.id);
+}
+function fieldControl(parameter,value,readonly=false){
+  const required=parameter.required?' required':'',disabled=readonly?' disabled':'';
+  const attrs=' name="'+esc(parameter.code)+'"'+required+disabled;
+  let input;
+  if(parameter.data_type==='reference'){
+    const target=metadata.types.find(t=>String(t.id)===String(parameter.reference_type_id));
+    const records=metadata.entities.filter(e=>!e.archived&&String(e.entity_type_id)===String(parameter.reference_type_id));
+    input='<select'+attrs+'><option value="">'+(parameter.required?'Выберите запись':'Не заполнено')+'</option>'+records.map(e=>'<option value="'+esc(e.id)+'" '+(String(value)===String(e.id)?'selected':'')+'>'+esc(recordLabel(e,target))+'</option>').join('')+'</select>';
+  }else if(parameter.data_type==='boolean'){
+    input='<select'+attrs+'><option value="">Не заполнено</option><option value="true" '+(value===true?'selected':'')+'>Да</option><option value="false" '+(value===false?'selected':'')+'>Нет</option></select>';
+  }else{
+    const type=parameter.data_type==='date'?'date':['integer','number'].includes(parameter.data_type)?'number':'text';
+    input='<input'+attrs+' type="'+type+'"'+(type==='number'?' step="'+(parameter.data_type==='integer'?'1':'any')+'"':'')+' value="'+esc(value??'')+'">';
+  }
+  return '<label>'+esc(parameter.label)+(readonly?' · основное поле':'')+input+'</label>';
+}
+function readValues(form,type,core=false){
+  const values={};
+  for(const p of type.parameters){
+    if(core&&p.core)continue;
+    const element=form.elements.namedItem(p.code);
+    if(!element)continue;
+    const raw=element.value;
+    if(raw===''){if(p.required)throw new Error('Заполните поле «'+p.label+'».');values[p.code]=null;continue;}
+    if(p.data_type==='boolean')values[p.code]=raw==='true';
+    else if(['integer','number','reference'].includes(p.data_type)){
+      const number=Number(raw);
+      if(!Number.isFinite(number)||(['integer','reference'].includes(p.data_type)&&!Number.isSafeInteger(number)))throw new Error('Проверьте поле «'+p.label+'».');
+      values[p.code]=number;
+    }else values[p.code]=raw;
+  }
+  return values;
+}
+function parameterBody(form,edit=false){
+  const body={label:form.elements.label.value,data_type:form.elements.data_type.value,required:form.elements.required.checked};
+  if(!edit){body.entity_type_id=Number(selectedType().id);body.code=form.elements.code.value;}
+  if(body.data_type==='reference'){
+    if(!form.elements.reference_type_id.value)throw new Error('Выберите справочник для ссылки.');
+    body.reference_type_id=Number(form.elements.reference_type_id.value);
+  }else if(edit)body.reference_type_id=null;
+  return body;
+}
+function toggleReference(form){
+  const reference=form.elements.data_type.value==='reference',label=$('.reference-target',form);
+  label.hidden=!reference;form.elements.reference_type_id.disabled=!reference;form.elements.reference_type_id.required=reference;
+}
+function renderMetadata(){
+  const old=$('#metadata-type').value;
+  $('#metadata-type').innerHTML=typeChoices(old);
+  $('#metadata-content').hidden=!metadata.types.length;
+  $('#metadata-status').textContent=metadata.types.length?'':'Пока нет справочников. Добавьте первый.';
+  $('#metadata-type-create button').disabled=false;
+  renderMetadataType();
+}
+function renderMetadataType(){
+  const type=selectedType();if(!type)return;
+  const parameterCreate=$('#metadata-parameter-create');
+  parameterCreate.elements.reference_type_id.innerHTML=typeChoices();toggleReference(parameterCreate);
+  $('#metadata-parameters').innerHTML=type.parameters.map(p=>p.core?
+    '<article class="service"><strong>'+esc(p.label)+'</strong><span class="muted">'+esc(dataTypes[p.data_type]||p.data_type)+' · основное поле</span><span class="muted">'+(p.required?'Обязательно':'Необязательно')+'</span></article>':
+    '<form class="service metadata-parameter" data-id="'+esc(p.id)+'"><label>Название поля<input name="label" maxlength="200" required value="'+esc(p.label)+'"></label><label>Что хранится<select name="data_type">'+Object.entries(dataTypes).map(([code,label])=>'<option value="'+code+'" '+(code===p.data_type?'selected':'')+'>'+label+'</option>').join('')+'</select></label><label class="reference-target" '+(p.data_type==='reference'?'':'hidden')+'>Из какого справочника<select name="reference_type_id">'+typeChoices(p.reference_type_id)+'</select></label><label class="choice"><input name="required" type="checkbox" '+(p.required?'checked':'')+'> Обязательно заполнять</label><button>Сохранить поле</button></form>').join('');
+  $$('.metadata-parameter').forEach(toggleReference);
+  $('#metadata-core-note').hidden=!type.core;
+  $('#metadata-entity-create').hidden=!!type.core;
+  $('#metadata-new-fields').innerHTML=type.parameters.map(p=>fieldControl(p,null)).join('')||'<p class="muted">Можно создать запись сейчас и добавить поля позже.</p>';
+  const records=metadata.entities.filter(e=>!e.archived&&String(e.entity_type_id)===String(type.id));
+  $('#metadata-entities').innerHTML=records.map(e=>{
+    const core=!!(e.core||type.core),editable=type.parameters.some(p=>!core||!p.core);
+    return '<form class="resource-card metadata-record" data-id="'+esc(e.id)+'" data-core="'+core+'"><div class="resource-heading"><strong>'+esc(recordLabel(e,type))+'</strong></div><div class="metadata-fields">'+type.parameters.map(p=>fieldControl(p,e.values?.[p.code],core&&p.core)).join('')+'</div>'+(editable?'<button>Сохранить запись</button>':'<p class="muted">Добавьте поле, чтобы заполнить дополнительные сведения.</p>')+'</form>';
+  }).join('')||'<p class="muted">В этом справочнике пока нет записей.</p>';
+}
+async function loadExtras(scope){
+  const revision=++extrasRevision;
+  $('#master-attach [data-service-choices]').innerHTML=choices();
+  $('#master-attach button').disabled=true;
+  $('#shared-master-status').textContent='Загружаем доступных мастеров…';
+  $('#metadata-status').textContent='Загружаем справочники…';
+  const results=await Promise.allSettled([api('/api/constructor',{scope}),api('/api/shared-masters',{scope})]);
+  if(!isCurrent(scope)||revision!==extrasRevision)return;
+  const [catalog,masters]=results;
+  if(catalog.status==='fulfilled'){
+    metadata=catalog.value;renderMetadata();
+  }else if(catalog.reason.name!=='AbortError'){$('#metadata-status').textContent=catalog.reason.message;$('#metadata-content').hidden=true;$('#metadata-type-create button').disabled=true;}
+  if(masters.status==='fulfilled'){
+    sharedMasters=masters.value.masters||[];
+    $('#master-attach [name=shared_master]').innerHTML=sharedMasters.map((m,i)=>'<option value="'+i+'">'+esc(m.name)+' · '+esc(m.source_salon_name)+'</option>').join('');
+    $('#master-attach button').disabled=!sharedMasters.length;
+    $('#shared-master-status').textContent=sharedMasters.length?'':'Нет мастеров из других доступных салонов, которых можно подключить.';
+  }else if(masters.reason.name!=='AbortError'){$('#shared-master-status').textContent=masters.reason.message;$('#master-attach [name=shared_master]').replaceChildren();}
 }
 const resourceBody=form=>b=>({name:b.name,service_ids:new FormData(form).getAll('service_ids').map(Number),active:form.classList.contains('resource-create')?true:form.elements.active.checked});
-const today=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+const today=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
 $('#day').value=today.year+'-'+today.month+'-'+today.day;
 function enterWorkspace(){
-  $('#auth').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;
-  if(!data.services.length||!data.masters.length||!data.rooms.length)selectTab('constructor');
+  $('#auth').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;$('#salon-picker').hidden=false;
 }
-function leaveWorkspace(){csrf='';data=null;$('#workspace').hidden=true;$('#logout').hidden=true;$('#auth').hidden=false;}
+function clearSalon(){
+  ++salonRevision;++snapshotRevision;++extrasRevision;
+  salonRequests.forEach(c=>c.abort());salonRequests.clear();
+  data=null;metadata=null;sharedMasters=[];
+  $('#toast').hidden=true;
+  $$('#workspace form').forEach(f=>f.reset());
+  $$('#workspace select').forEach(s=>{if(['service_id','master_id','resource_id','shared_master','reference_type_id'].includes(s.name)||s.id==='metadata-type')s.replaceChildren();});
+  ['lanes','setup-summary','service-list','master-cards','room-cards','schedule-overview','schedule-intervals','metadata-parameters','metadata-entities','metadata-new-fields'].forEach(id=>$('#'+id).replaceChildren());
+  $$('[data-service-choices]').forEach(el=>el.replaceChildren());
+  $('#booking-count').textContent='0';$('#room-pressure').textContent='—';$('#issue-count').textContent='0';
+  $$('.salon-zone,#schedule-zone').forEach(el=>el.textContent='');
+  $('#metadata-content').hidden=true;$('#metadata-status').textContent='';$('#shared-master-status').textContent='';
+  $$('#workspace button').forEach(b=>b.disabled=true);
+  view='masters';selectTab('calendar');selectBuilder('builder-services');
+  $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+}
+async function chooseSalon(id){
+  if(!session?.salons.some(s=>String(s.id)===String(id)))return;
+  clearSalon();salonId=String(id);$('#salon-select').value=salonId;
+  try{localStorage.setItem('lera.salon.'+session.username,salonId);}catch{}
+  enterWorkspace();$('#workspace-status').textContent='Загружаем выбранный салон…';$('#workspace-status').hidden=false;
+  const scope=context();
+  try{
+    await load();
+    if(isCurrent(scope)&&(!data.services.length||!data.masters.length||!data.rooms.length))selectTab('constructor');
+  }catch(e){
+    if(isCurrent(scope)&&e.name!=='AbortError'){$('#workspace-status').textContent='Не удалось загрузить салон. Нажмите «Обновить», чтобы повторить.';report(e);}
+  }
+}
+async function acceptSession(value){
+  session=value;csrf=value.csrf_token;
+  session.salons=Array.isArray(value.salons)?value.salons.filter(s=>s.id!==undefined&&typeof s.name==='string'):[];
+  if(!session.salons.length)throw new Error('Для этого аккаунта нет доступных салонов.');
+  $('#salon-select').innerHTML=session.salons.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
+  let restored='';try{restored=localStorage.getItem('lera.salon.'+session.username)||'';}catch{}
+  const selected=session.salons.find(s=>String(s.id)===restored)||session.salons[0];
+  await chooseSalon(selected.id);
+}
+function leaveWorkspace(){clearSalon();csrf='';session=null;salonId='';$('#salon-select').replaceChildren();$('#salon-picker').hidden=true;$('#workspace').hidden=true;$('#logout').hidden=true;$('#auth').hidden=false;}
 $('#auth-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  try{const session=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('#username').value,password:$('#password').value})});csrf=session.csrf_token;await load();enterWorkspace();e.target.reset();}
-  catch(err){show(err.body?.error==='authentication_required'?'Неверный логин или пароль':err.message,true);}
+  const button=e.target.querySelector('button');if(button.disabled)return;button.disabled=true;
+  try{const value=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('#username').value,password:$('#password').value})});await acceptSession(value);e.target.reset();}
+  catch(err){leaveWorkspace();show(err.body?.error==='authentication_required'?'Неверный логин или пароль':err.message,true);}
+  finally{button.disabled=false;}
 });
 $('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST',body:'{}'});}finally{leaveWorkspace();}});
-$('#reload').addEventListener('click',()=>csrf&&load().catch(e=>show(e.message,true)));
-$('#day').addEventListener('change',()=>csrf&&load().catch(e=>show(e.message,true)));
+$('#salon-select').addEventListener('change',e=>chooseSalon(e.target.value));
+$('#reload').addEventListener('click',()=>csrf&&load().catch(report));
+$('#day').addEventListener('change',()=>csrf&&load().catch(report));
 $$('.tabs button').forEach(b=>b.addEventListener('click',()=>selectTab(b.dataset.tab)));
 $$('.builder-nav button').forEach(b=>b.addEventListener('click',()=>selectBuilder(b.dataset.build)));
 $('#setup-summary').addEventListener('click',e=>{if(e.target.closest('[data-open-constructor]'))selectTab('constructor');});
-$$('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));renderCalendar();}));
+$$('[data-view]').forEach(b=>b.addEventListener('click',()=>{if(!data)return;view=b.dataset.view;$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));renderCalendar();}));
 $('#booking-form [name=service_id]').addEventListener('change',updateBookingMasters);
 $('#block-form [name=resource_kind]').addEventListener('change',updateBlockResources);
 $('#schedule-form [name=resource_kind]').addEventListener('change',updateScheduleResources);
@@ -190,5 +356,26 @@ $('#service-create').addEventListener('submit',e=>{e.preventDefault();submitJson
 $('#service-list').addEventListener('submit',e=>{e.preventDefault();const f=e.target;submitJson(f,'/api/services/'+f.dataset.id,b=>({name:b.name,duration_minutes:+b.duration_minutes,active:f.elements.active.checked}),{canCancelAffected:true});});
 $$('.resource-create').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();submitJson(f,'/api/'+f.dataset.kind+'s',resourceBody(f),{reset:true});}));
 ['master','room'].forEach(kind=>$('#'+kind+'-cards').addEventListener('submit',e=>{e.preventDefault();const f=e.target;submitJson(f,'/api/'+kind+'s/'+f.dataset.id,resourceBody(f),{canCancelAffected:true});}));
-$('#lanes').addEventListener('click',async e=>{const id=e.target.dataset.cancel;if(!id)return;try{await api('/api/bookings/'+id+'/cancel',{method:'POST',body:JSON.stringify({action_key:crypto.randomUUID()})});show('Запись №'+id+' отменена');await load();}catch(err){show(err.message,true);}});
-api('/api/session').then(session=>{csrf=session.csrf_token;return load();}).then(enterWorkspace).catch(leaveWorkspace);
+$('#master-attach').addEventListener('submit',e=>{
+  e.preventDefault();const f=e.target;
+  submitJson(f,'/api/masters/attach',()=>{
+    const master=sharedMasters[Number(f.elements.shared_master.value)];
+    if(!master)throw new Error('Выберите доступного мастера.');
+    return {source_salon_id:master.source_salon_id,master_id:master.master_id,service_ids:new FormData(f).getAll('service_ids').map(Number),active:true};
+  },{reset:true});
+});
+$('#metadata-type').addEventListener('change',()=>{
+  $('#metadata-parameter-create').reset();$('#metadata-entity-create').reset();renderMetadataType();
+});
+$('#metadata-type-create').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/constructor/types',b=>({code:b.code,label:b.label}),{reset:true});});
+$('#metadata-parameter-create').addEventListener('change',e=>{if(e.target.name==='data_type')toggleReference(e.currentTarget);});
+$('#metadata-parameter-create').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/constructor/parameters',()=>parameterBody(e.target),{reset:true});});
+$('#metadata-parameters').addEventListener('change',e=>{if(e.target.name==='data_type')toggleReference(e.target.form);});
+$('#metadata-parameters').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/constructor/parameters/'+encodeURIComponent(e.target.dataset.id),()=>parameterBody(e.target,true));});
+$('#metadata-entity-create').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/constructor/entities',()=>{
+  const type=selectedType();if(!type||type.core)throw new Error('Основные записи создаются в соответствующем разделе.');
+  return {entity_type_id:Number(type.id),values:readValues(e.target,type)};
+},{reset:true});});
+$('#metadata-entities').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/constructor/entities/'+encodeURIComponent(e.target.dataset.id),()=>({values:readValues(e.target,selectedType(),e.target.dataset.core==='true')}));});
+$('#lanes').addEventListener('click',async e=>{const id=e.target.dataset.cancel;if(!id||e.target.disabled)return;const scope=context();e.target.disabled=true;try{await api('/api/bookings/'+id+'/cancel',{scope,method:'POST',body:JSON.stringify({action_key:crypto.randomUUID()})});if(!isCurrent(scope))return;show('Запись №'+id+' отменена');await load();}catch(err){if(isCurrent(scope)){e.target.disabled=false;report(err);}}});
+api('/api/session').then(acceptSession).catch(leaveWorkspace);

@@ -9,7 +9,8 @@ button:hover,button.active { background:var(--acid); transform:translate(-1px,-1
 h1,h2 { margin:.2rem 0; line-height:1; letter-spacing:-.04em; }
 h1 { font-size:clamp(2.2rem,6vw,5rem); max-width:8ch; }
 .eyebrow { text-transform:uppercase; letter-spacing:.13em; font-size:.72rem; font-weight:800; }
-.head-tools { display:flex; gap:.7rem; align-items:end; }
+.head-tools { display:flex; gap:.7rem; align-items:end; flex-wrap:wrap; }
+.head-tools select { max-width:min(300px,70vw); }
 label { display:grid; gap:.35rem; font-weight:700; }
 input,select { min-width:0; border:1px solid var(--ink); padding:.7rem; background:white; }
 main { padding:clamp(1rem,3vw,3rem) clamp(1rem,4vw,4rem); }
@@ -65,6 +66,12 @@ main { padding:clamp(1rem,3vw,3rem) clamp(1rem,4vw,4rem); }
 .editor .interval-row button { grid-column:auto; }
 .schedule-overview { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:1rem; margin-top:1.5rem; }
 .schedule-overview article { border:1px solid var(--ink); background:var(--card); padding:1rem; }
+.spaced-editor,.metadata-picker { margin-top:1.5rem; }
+.metadata-picker { max-width:760px; margin-bottom:1.5rem; }
+.metadata-fields { display:grid; gap:1rem; }
+.metadata-record { min-width:0; }
+.metadata-record input:disabled,.metadata-record select:disabled { color:var(--muted); background:var(--paper); opacity:1; }
+input:focus-visible,select:focus-visible,button:focus-visible { outline:3px solid var(--hot); outline-offset:3px; }
 button:disabled { opacity:.45; cursor:default; transform:none; }
 @media (max-width:700px) {
   .masthead,.gate { grid-template-columns:1fr; display:grid; align-items:start; }
