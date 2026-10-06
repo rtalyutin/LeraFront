@@ -30,6 +30,42 @@ main { padding:clamp(1rem,3vw,3rem) clamp(1rem,4vw,4rem); }
 .slot { grid-column:var(--start)/span var(--span); min-width:120px; padding:.65rem; border:1px solid var(--ink); background:var(--acid); box-shadow:3px 3px 0 var(--ink); }
 .slot.cancelled { background:#ded8d2; box-shadow:none; opacity:.65; }
 .slot small { display:block; }
+.calendar-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:18px; margin:24px 0 12px; }
+.week-navigation { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.week-navigation h2 { font-size:22px; letter-spacing:-.025em; line-height:1.3; }
+.week-navigation button { box-shadow:none; border-radius:5px; padding:8px 13px; }
+.calendar-filters { display:flex; align-items:end; gap:14px; flex-wrap:wrap; }
+.calendar-filters .view-switch { margin:0; gap:0; }
+.calendar-filters button { box-shadow:none; padding:9px 12px; }
+.calendar-filters label { gap:4px; font-size:12px; }
+.calendar-filters select { padding:8px; max-width:260px; }
+.week-scroll-hint { margin:0; font-size:12px; color:var(--muted); }
+.week-scroll { overflow:auto; max-height:75vh; border:1px solid var(--line); border-radius:8px; background:var(--card); }
+.week-grid { display:grid; grid-template-columns:54px repeat(7,minmax(144px,1fr)); min-width:1062px; padding-bottom:16px; }
+.week-corner,.week-day-heading { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line); padding:12px 8px; }
+.week-corner { left:0; z-index:6; font-size:10px; color:var(--muted); }
+.week-day-heading { display:flex; flex-wrap:wrap; align-items:center; gap:6px; border-left:1px solid var(--line); }
+.week-day-heading strong { font-size:15px; }.week-day-heading span { font-size:13px; }
+.week-day-heading small { flex-basis:100%; color:var(--muted); font-size:11px; }
+.week-day-heading.is-today { background:var(--acid); }
+.week-time-axis,.week-day-schedule { position:relative; height:var(--week-height); }
+.week-time-axis { position:sticky; left:0; z-index:4; background:var(--card); }
+.week-time { position:absolute; right:6px; font-size:10px; color:var(--muted); line-height:1; transform:translateY(-50%); background:var(--card); padding:2px 0; }
+.week-time:first-child { transform:none; }.week-time:last-child { transform:translateY(-100%); }
+.week-day-schedule { min-width:0; border-left:1px solid var(--line); background:#eee9e2; }
+.week-working { position:absolute; left:0; right:0; background:#fffdf8; }
+.week-lines { position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(to bottom,transparent 0,transparent 35px,var(--line) 35px,var(--line) 36px); }
+.week-booking { position:absolute; z-index:2; min-width:0; min-height:16px; border:1px solid #96b32f; border-left:3px solid #71851e; border-radius:4px; background:var(--acid); padding:1px 4px; text-align:left; overflow:hidden; box-shadow:none; line-height:1.25; font-size:11px; }
+.week-booking b,.week-booking strong,.week-booking small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.week-booking b { font-size:10px; }.week-booking strong { font-weight:600; margin-top:2px; }.week-booking small { margin-top:2px; }
+.week-booking:hover,.week-booking.is-selected { transform:none; box-shadow:inset 0 0 0 1px var(--ink); background:var(--acid); z-index:3; }
+.week-booking.cancelled,.week-booking.rescheduled { background:#ded8d2; border-color:#b4aca3; color:#635b53; }
+.week-booking.cancelled strong,.week-booking.rescheduled strong { text-decoration:line-through; }
+.week-booking:focus-visible { outline:2px solid var(--ink); outline-offset:1px; }
+.week-empty { position:absolute; top:12px; left:8px; right:8px; font-size:11px; color:var(--muted); pointer-events:none; }
+.week-detail { display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; padding:18px; border:1px solid var(--ink); border-left:5px solid var(--acid); background:var(--card); border-radius:6px; }
+.week-detail h3 { margin:4px 0 8px; }.week-detail p { margin:4px 0; overflow-wrap:anywhere; }.week-detail-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }.week-detail-actions button { box-shadow:none; }
+@media (max-width:700px) { .calendar-toolbar,.calendar-filters { align-items:stretch; }.calendar-toolbar>*,.calendar-filters label { width:100%; }.week-navigation { gap:8px; }.week-navigation h2 { font-size:17px; }.week-navigation>div { flex:1; min-width:160px; }.calendar-filters { gap:12px; }.calendar-filters select { max-width:none; }.week-scroll { max-height:70vh; }.week-detail { padding:12px; } }
 .empty { color:var(--muted); padding:1rem; border:1px dashed var(--line); }
 .editor { display:grid; grid-template-columns:repeat(2,minmax(180px,1fr)); gap:1rem; max-width:760px; border:2px solid var(--ink); background:var(--card); padding:1.5rem; box-shadow:8px 8px 0 var(--ink); }
 .editor h2,.editor button { grid-column:1/-1; }

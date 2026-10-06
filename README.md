@@ -44,7 +44,15 @@ The frontend expects the salon-aware session contract (`salons: [{id, name, role
 
 The constructor starts empty on a new database. Existing records remain editable. Master cards use initials as placeholder avatars for any number of masters. Deactivation and removal of service eligibility require confirmation when they affect future bookings. Renaming preserves existing booking snapshots. Changes to service duration use the same confirmation flow.
 
-The calendar follows configured hours rather than a fixed 09:00–18:00 window. Manual booking and blocks use the salon's timezone, even when the browser uses another timezone. The frontend filters masters by the selected service; the backend makes the final availability and overlap checks. If a catalog or hours are incomplete, the booking engine returns no matching slots.
+The calendar shows Monday through Sunday in seven dated columns with time vertically. Previous/next week, Today and the date picker select the visible week. Each day is loaded from the existing salon-scoped snapshot API; the full week replaces the calendar only after every request succeeds. Failed or superseded requests never leave a partial week on screen. Initial Today uses the salon's timezone.
+
+Choose all or one master/room. Working hours appear on the same time scale; bookings outside those hours remain visible, including appointments for inactive resources in the All view. Simultaneous appointments use separate columns within their day. Select a booking to see its full time, service, master, room, phone and inline cancellation. Week totals cover all seven days. Narrow screens can scroll the same week horizontally; day headers and the time axis stay visible while scrolling.
+
+Very short appointments retain a selectable minimum height. Their visual bounds determine separate tracks, while their start times and displayed end times stay exact. Clearing the date retains the selected week; cancelling salon creation restores the cached week, filter and open booking.
+
+Verification (2026-10-07): `npm test` passed 105 checks, including 20 weekly-calendar DOM/API checks. Independent acceptance passed 22 scenarios through a local HTTP fixture and 32 checks in Chromium 153 at widths 320, 390, 768, 1440 and 1920. Year boundaries, salon timezone, filtering, cancellation, stale responses, malformed dates, one-minute adjacent appointments and 23:59–24:00 were covered; no unhandled JavaScript errors occurred. Screenshots were inspected. API replies were synthetic; production deployment and the full constructor acceptance requiring backend port 8092 were not verified by this run.
+
+The calendar follows configured hours rather than a fixed 09:00–18:00 window. Manual booking and blocks use the salon's timezone, even when the browser uses another timezone. The frontend filters masters by the selected service; the backend makes the final availability and overlap checks. If a catalog or hours are incomplete, the booking engine returns no matching slots. The daily snapshot API still determines which records are returned; this UI change does not alter its day-boundary contract.
 
 ## VK connection
 

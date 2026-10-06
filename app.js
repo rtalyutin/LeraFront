@@ -4,6 +4,7 @@ const esc = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'
 const fmt = n => String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
 const weekdays=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 let data=null, view='masters', csrf='', session=null, salonId='', salonRevision=0, snapshotRevision=0;
+let calendarWeek=null, calendarState='', calendarResource='', calendarBooking='', calendarDateExplicit=false;
 let metadata=null, sharedMasters=[], extrasRevision=0;
 let vkStatus=null, vkBusy='', vkError='', vkReadBusy=false, vkNeedsRefresh=false;
 let vkRevision=0, vkPollTimer=null, vkReadController=null;
@@ -51,6 +52,13 @@ function localParts(iso) {
 }
 function localInput(iso){const p=localParts(iso);return p.hour+':'+p.minute;}
 function localMinute(iso){const p=localParts(iso);return +p.hour*60 + +p.minute;}
+function salonDate(iso=new Date(),zone=data.timezone){
+  const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(iso)).map(x=>[x.type,x.value]));
+  return p.year+'-'+p.month+'-'+p.day;
+}
+function shiftDate(date,days){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+function weekDates(date){const offset=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;return Array.from({length:7},(_,i)=>shiftDate(date,i-offset));}
+function calendarDateLabel(date,options={day:'numeric',month:'long'}){return new Intl.DateTimeFormat('ru-RU',{timeZone:'UTC',...options}).format(new Date(date+'T12:00:00Z'));}
 function salonTime(value) {
   const [date,time]=value.split('T'),[year,month,day]=date.split('-').map(Number),[hour,minute]=time.split(':').map(Number);
   const target=Date.UTC(year,month-1,day,hour,minute);
@@ -88,27 +96,68 @@ function resourceCards(kind) {
   }).join('')||'<p class="muted">Пока нет '+(kind==='master'?'мастеров':'кабинетов')+'. Добавьте первый.</p>';
 }
 function renderCalendar() {
-  const resources=data[view].filter(r=>r.active),kind=view==='masters'?'master':'room',key=kind+'_id';
-  const bounds=[];
-  resources.forEach(r=>weekly(kind,r.id).forEach(w=>bounds.push(w.start_minute,w.end_minute)));
-  data.bookings.forEach(b=>{bounds.push(localMinute(b.start_utc));bounds.push(localMinute(b.start_utc)+(new Date(b.end_utc)-new Date(b.start_utc))/60000);});
-  const from=bounds.length?Math.floor(Math.min(...bounds)/30)*30:0,to=bounds.length?Math.ceil(Math.max(...bounds)/30)*30:1440;
-  const columns=Math.max(1,(to-from)/30);
-  $('#lanes').innerHTML=resources.map(r=>{
-    const hours=weekly(kind,r.id),bookings=data.bookings.filter(b=>b[key]===r.id);
-    const cards=bookings.map(b=>{
-      const minute=localMinute(b.start_utc),duration=(new Date(b.end_utc)-new Date(b.start_utc))/60000;
-      const start=Math.floor((minute-from)/30)+1,span=Math.max(1,Math.ceil(((minute-from)%30+duration)/30));
-      return '<article class="slot '+esc(b.status)+'" style="--start:'+start+';--span:'+span+'" title="'+esc(b.phone||'')+'"><strong>'+localInput(b.start_utc)+'–'+localInput(b.end_utc)+' · '+esc(b.service_name_snapshot)+'</strong><small>'+esc(b.master_name_snapshot)+' · '+esc(b.room_name)+'</small><small>'+esc(b.status)+'</small>'+(b.status==='confirmed'?'<button class="cancel" data-cancel="'+b.id+'">Отменить</button>':'')+'</article>';
+  const dates=calendarWeek?.dates||weekDates($('#day').value);
+  $('#week-title').textContent=calendarDateLabel(dates[0])+' — '+calendarDateLabel(dates[6],{day:'numeric',month:'long',year:'numeric'});
+  const status=$('#calendar-week-status');
+  if(calendarState!=='ready'||!data){
+    status.textContent=calendarState==='error'?'Не удалось загрузить всю неделю. Нажмите «Обновить», чтобы повторить.':'Загружаем записи на неделю…';
+    $('#lanes').innerHTML='';return;
+  }
+  const kind=view==='masters'?'master':'room',key=kind+'_id';
+  const selector=$('#calendar-resource');
+  selector.innerHTML='<option value="">'+(kind==='master'?'Все мастера':'Все кабинеты')+'</option>'+data[view].map(r=>'<option value="'+esc(r.id)+'">'+esc(r.name)+(r.active?'':' · неактивен')+'</option>').join('');
+  if(!data[view].some(r=>String(r.id)===calendarResource))calendarResource='';
+  selector.value=calendarResource;
+  $('#calendar-resource-label').textContent=kind==='master'?'Мастер':'Кабинет';
+  selector.setAttribute('aria-label',kind==='master'?'Мастер календаря':'Кабинет календаря');
+  const resources=data[view].filter(r=>calendarResource?String(r.id)===calendarResource:r.active);
+  const bookings=calendarWeek.bookings.filter(b=>!calendarResource||String(b[key])===calendarResource);
+  const days=dates.map((date,weekday)=>{
+    const hours=resources.flatMap(r=>weekly(kind,r.id,weekday)).sort((a,b)=>a.start_minute-b.start_minute);
+    const merged=[];
+    hours.forEach(w=>{const last=merged.at(-1);if(last&&w.start_minute<=last.end)last.end=Math.max(last.end,w.end_minute);else merged.push({start:w.start_minute,end:w.end_minute});});
+    const entries=bookings.flatMap(b=>{
+      const startDate=salonDate(b.start_utc),endDate=salonDate(b.end_utc);
+      if(startDate>date||endDate<date)return [];
+      const start=startDate===date?localMinute(b.start_utc):0,end=endDate===date?localMinute(b.end_utc):1440;
+      return end>start?[{booking:b,start,end}]:[];
+    }).sort((a,b)=>a.start-b.start||a.end-b.end||a.booking.id-b.booking.id);
+    // Short cards need 16px to stay selectable; partition their visible bounds too.
+    let group=[],ends=[],until=0;
+    const finish=()=>{group.forEach(e=>e.columns=ends.length);group=[];ends=[];};
+    entries.forEach(e=>{
+      if(group.length&&e.start>=until)finish();
+      let column=ends.findIndex(end=>end<=e.start);
+      if(column===-1)column=ends.length;
+      const visibleEnd=Math.max(e.end,e.start+16*60/72);
+      ends[column]=visibleEnd;e.column=column;group.push(e);until=Math.max(until,visibleEnd);
+    });finish();
+    return {date,weekday,hours:merged,entries};
+  });
+  const bounds=days.flatMap(d=>[...d.hours,...d.entries].flatMap(e=>[e.start,e.end]));
+  const from=bounds.length?Math.max(0,Math.floor(Math.min(...bounds)/30)*30):0;
+  const to=bounds.length?Math.min(1440,Math.ceil(Math.max(...bounds)/30)*30):1440;
+  const range=Math.max(30,to-from),position=minute=>(minute-from)/range*100;
+  const ticks=[];
+  for(let minute=from;minute<=to;minute+=30)ticks.push('<span class="week-time" style="top:'+position(minute)+'%">'+fmt(minute)+'</span>');
+  const today=salonDate(),statuses={confirmed:'Подтверждена',cancelled:'Отменена',rescheduled:'Перенесена'};
+  status.textContent='Часовой пояс: '+data.timezone+' · '+bookings.filter(b=>b.status==='confirmed').length+' подтверждённых записей. Нажмите запись, чтобы открыть подробности.';
+  const selected=calendarWeek.bookings.find(b=>String(b.id)===calendarBooking);
+  const details=selected?'<section class="week-detail" aria-label="Подробности записи"><div><span class="eyebrow">'+esc(statuses[selected.status]||selected.status)+'</span><h3>'+esc(selected.service_name_snapshot)+'</h3><p>'+calendarDateLabel(salonDate(selected.start_utc))+' · '+localInput(selected.start_utc)+'–'+localInput(selected.end_utc)+'</p><p>'+esc(selected.master_name_snapshot)+' · '+esc(selected.room_name)+' · '+esc(selected.phone_snapshot||selected.phone||'Телефон не указан')+'</p></div><div class="week-detail-actions">'+(selected.status==='confirmed'?'<button type="button" data-cancel="'+esc(selected.id)+'">Отменить запись</button>':'')+'<button type="button" data-close-booking>Закрыть подробности</button></div></section>':'';
+  $('#lanes').innerHTML=details+'<p class="week-scroll-hint">На узком экране прокрутите неделю вправо. Серым отмечено время вне рабочего графика.</p><div class="week-scroll" tabindex="0" role="region" aria-label="Расписание с понедельника по воскресенье"><div class="week-grid" style="--week-height:'+range/60*72+'px"><div class="week-corner">Время</div>'+days.map(d=>'<div class="week-day-heading'+(d.date===today?' is-today':'')+'"><strong>'+weekdays[d.weekday]+'</strong><span>'+calendarDateLabel(d.date,{day:'numeric',month:'short'})+'</span><small>'+d.entries.filter(e=>e.booking.status==='confirmed').length+' записей</small></div>').join('')+'<div class="week-time-axis">'+ticks.join('')+'</div>'+days.map(d=>{
+    const bands=d.hours.map(w=>'<div class="week-working" style="top:'+position(w.start)+'%;height:'+(w.end-w.start)/range*100+'%" aria-hidden="true"></div>').join('');
+    const cards=d.entries.map(e=>{
+      const b=e.booking,label=weekdays[d.weekday]+', '+calendarDateLabel(d.date)+', '+fmt(e.start)+'–'+fmt(e.end)+', '+b.service_name_snapshot+', '+b.master_name_snapshot+', '+b.room_name+', '+(statuses[b.status]||b.status);
+      return '<button type="button" class="week-booking '+esc(b.status)+(String(b.id)===calendarBooking?' is-selected':'')+'" data-booking="'+esc(b.id)+'" aria-expanded="'+(String(b.id)===calendarBooking)+'" aria-label="'+esc(label)+'" title="'+esc(label)+'" style="top:'+position(e.start)+'%;height:calc('+(e.end-e.start)/range*100+'% - 2px);left:calc('+e.column/e.columns*100+'% + 2px);width:calc('+100/e.columns+'% - 4px)"><b>'+fmt(e.start)+'–'+fmt(e.end)+'</b><strong>'+esc(b.service_name_snapshot)+'</strong><small>'+esc(kind==='master'?b.master_name_snapshot:b.room_name)+'</small></button>';
     }).join('');
-    return '<div class="lane"><div class="lane-title"><span class="eyebrow">'+(kind==='master'?'Мастер':'Кабинет')+'</span><strong>'+esc(r.name)+'</strong><small>'+(hours.map(w=>fmt(w.start_minute)+'–'+fmt(w.end_minute)).join(', ')||'График не задан')+'</small></div><div class="rail-wrap"><div class="rail-label">'+fmt(from)+' — '+fmt(to)+'</div><div class="rail" style="--columns:'+columns+'">'+(cards||'<span class="empty">'+(hours.length?'Записей нет':'Приём не настроен')+'</span>')+'</div></div></div>';
-  }).join('')||'<p class="empty">Добавьте '+(kind==='master'?'мастеров':'кабинеты')+' в конструкторе.</p>';
+    return '<section class="week-day-schedule" data-date="'+d.date+'" aria-label="'+weekdays[d.weekday]+' '+calendarDateLabel(d.date)+'">'+bands+'<div class="week-lines" aria-hidden="true"></div>'+cards+(!d.entries.length?'<span class="week-empty">'+(d.hours.length?'Нет записей':'График не задан')+'</span>':'')+'</section>';
+  }).join('')+'</div></div>';
 }
 function render() {
-  const activeBookings=data.bookings.filter(b=>b.status==='confirmed');
+  const activeBookings=(calendarWeek?.bookings||data.bookings).filter(b=>b.status==='confirmed');
   $('#booking-count').textContent=activeBookings.length;
   $('#issue-count').textContent=data.delivery_issues.length;
-  const total=data.rooms.filter(r=>r.active).flatMap(r=>weekly('room',r.id)).reduce((sum,w)=>sum+w.end_minute-w.start_minute,0);
+  const total=data.rooms.filter(r=>r.active).flatMap(r=>data.weekly_schedule.filter(w=>w.room_id===r.id)).reduce((sum,w)=>sum+w.end_minute-w.start_minute,0);
   const busy=activeBookings.reduce((sum,b)=>sum+(new Date(b.end_utc)-new Date(b.start_utc))/60000,0);
   $('#room-pressure').textContent=total?Math.round(busy/total*100)+'%':'—';
   const counts=[['Услуги',data.services.filter(r=>r.active).length],['Мастера',data.masters.filter(r=>r.active).length],['Кабинеты',data.rooms.filter(r=>r.active).length],['Интервалы',data.weekly_schedule.length]];
@@ -125,10 +174,31 @@ function render() {
 }
 async function load(){
   const scope=context(),revision=++snapshotRevision;
-  const snapshot=await api('/api/snapshot?date='+encodeURIComponent($('#day').value),{scope});
-  if(!isCurrent(scope)||revision!==snapshotRevision)throw stale();
-  data=snapshot;$$('#workspace button').forEach(b=>b.disabled=false);render();renderVk();renderSalonManagement();$('#workspace-status').hidden=true;
-  loadExtras(scope);
+  calendarState='loading';calendarWeek=null;calendarBooking='';renderCalendar();
+  $('#booking-count').textContent='—';$('#room-pressure').textContent='—';
+  try{
+    const initialDate=$('#day').value;
+    const initial=!data?await api('/api/snapshot?date='+encodeURIComponent(initialDate),{scope}):null;
+    if(!isCurrent(scope)||revision!==snapshotRevision)throw stale();
+    if(initial?.timezone&&!calendarDateExplicit)$('#day').value=salonDate(new Date(),initial.timezone);
+    const selectedDate=$('#day').value,dates=weekDates(selectedDate);
+    const snapshots=await Promise.all(dates.map(date=>date===initialDate&&initial?initial:api('/api/snapshot?date='+encodeURIComponent(date),{scope})));
+    if(!isCurrent(scope)||revision!==snapshotRevision)throw stale();
+    const snapshot=snapshots[dates.indexOf(selectedDate)];
+    if(snapshots.some(s=>s.timezone!==snapshot.timezone))throw new Error('Часовой пояс салона изменился во время загрузки. Обновите календарь.');
+    const unique=new Map();
+    snapshots.forEach(s=>(s.bookings||[]).forEach(b=>{
+      const start=Date.parse(b?.start_utc),end=Date.parse(b?.end_utc);
+      if(!b||!Number.isSafeInteger(b.id)||b.id<=0||!Number.isFinite(start)||!Number.isFinite(end)||end<=start)throw new Error('Получены некорректные данные записи. Нажмите «Обновить», чтобы повторить.');
+      unique.set(String(b.id),b);
+    }));
+    data=snapshot;calendarWeek={dates,selectedDate,snapshots,bookings:[...unique.values()]};calendarState='ready';
+    $$('#workspace button').forEach(b=>b.disabled=false);render();renderVk();renderSalonManagement();$('#workspace-status').hidden=true;
+    loadExtras(scope);
+  }catch(e){
+    if(isCurrent(scope)&&revision===snapshotRevision){calendarState='error';renderCalendar();}
+    throw e;
+  }
 }
 const vkTitles={disconnected:'Бот пока не подключён',configuring:'Настраиваем ВК',connected:'ВК-бот подключён',needs_attention:'Нужно проверить подключение'};
 const vkMessages={disconnected:'Укажите сообщество и его ключ доступа, чтобы начать.',configuring:'Настраиваем сообщество автоматически. Состояние обновляется без перезагрузки.',connected:'Подключение готово. Откройте бота в сообщениях сообщества.',needs_attention:'Повторите настройку или подключите сообщество с новым ключом.'};
@@ -338,7 +408,7 @@ async function loadSalonDetails(scope=context()){
 function startSalonCreation(){
   if(!session||salonCreateMode||salonCreateBusy)return;
   if(window.salonConstructor?.guardDeparture(startSalonCreation))return;
-  const saved=salonId?{salonId,data,metadata,sharedMasters,salonDetails,vkStatus,vkNeedsRefresh:vkNeedsRefresh||!!vkBusy||vkReadBusy,view,tab:$('.tabs button.active')?.dataset.tab||'salon',builder:$('.builder-nav button.active')?.dataset.build||'builder-services'}:null;
+  const saved=salonId?{salonId,data,calendarWeek,calendarState,calendarResource,calendarBooking,metadata,sharedMasters,salonDetails,vkStatus,vkNeedsRefresh:vkNeedsRefresh||!!vkBusy||vkReadBusy,view,tab:$('.tabs button.active')?.dataset.tab||'salon',builder:$('.builder-nav button.active')?.dataset.build||'builder-services'}:null;
   clearSalon();salonId='';salonCreateMode=true;salonReturnState=saved;
   enterWorkspace();$('#workspace-status').hidden=true;selectTab('salon');renderSalonManagement();$('#salon-create-name').focus();
 }
@@ -346,6 +416,7 @@ function cancelSalonCreation(){
   if(!salonCreateMode||salonCreateBusy||salonCreateSubmission||!salonReturnState)return;
   const saved=salonReturnState;clearSalon();
   salonId=saved.salonId;data=saved.data;metadata=saved.metadata;sharedMasters=saved.sharedMasters;salonDetails=saved.salonDetails;vkStatus=saved.vkStatus;view=saved.view;
+  calendarWeek=saved.calendarWeek;calendarState=saved.calendarState==='loading'?'error':saved.calendarState;calendarResource=saved.calendarResource;calendarBooking=saved.calendarBooking;
   $('#salon-select').value=salonId;enterWorkspace();
   if(data){$$('#workspace button').forEach(b=>b.disabled=false);render();if(metadata)renderMetadata();renderSharedMasters();}
   if(salonDetails)$('#salon-edit-name').value=salonDetails.name;
@@ -557,6 +628,9 @@ function clearSalon(){
   resetVk();
   resetSalonManagement();
   data=null;metadata=null;sharedMasters=[];
+  calendarWeek=null;calendarState='';calendarResource='';calendarBooking='';
+  $('#calendar-resource').innerHTML='<option value="">Все мастера</option>';
+  $('#week-title').textContent='';$('#calendar-week-status').textContent='';
   $('#toast').hidden=true;
   $$('#workspace form').forEach(f=>f.reset());
   $$('#workspace select').forEach(s=>{if(['service_id','master_id','resource_id','shared_master','reference_type_id'].includes(s.name)||s.id==='metadata-type')s.replaceChildren();});
@@ -567,7 +641,7 @@ function clearSalon(){
   $('#metadata-content').hidden=true;$('#metadata-status').textContent='';$('#shared-master-status').textContent='';
   $$('#workspace button').forEach(b=>b.disabled=true);
   view='masters';selectTab('calendar');selectBuilder('builder-services');
-  $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  $$('[data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===view);b.setAttribute('aria-pressed',String(b.dataset.view===view));});
   renderSalonManagement();
 }
 async function chooseSalon(id){
@@ -607,11 +681,22 @@ async function logout(){if(window.salonConstructor?.guardDeparture(logout))retur
 $('#logout').addEventListener('click',logout);
 $('#salon-select').addEventListener('change',e=>chooseSalon(e.target.value));
 $('#reload').addEventListener('click',()=>{if(csrf&&salonId&&!salonCreateMode){load().catch(report);loadSalonDetails();}});
-$('#day').addEventListener('change',()=>csrf&&load().catch(report));
+$('#day').addEventListener('change',()=>{if(!$('#day').value){$('#day').value=calendarWeek?.selectedDate||(data?salonDate():today.year+'-'+today.month+'-'+today.day);return;}calendarDateExplicit=true;if(csrf&&salonId)load().catch(report);});
+function moveWeek(days){if(!csrf||!salonId)return;$('#day').value=shiftDate($('#day').value,days);calendarDateExplicit=true;load().catch(report);}
+$('#week-prev').addEventListener('click',()=>moveWeek(-7));
+$('#week-next').addEventListener('click',()=>moveWeek(7));
+$('#week-today').addEventListener('click',()=>{if(!data)return;$('#day').value=salonDate();calendarDateExplicit=true;load().catch(report);});
+$('#calendar-resource').addEventListener('change',e=>{calendarResource=e.target.value;calendarBooking='';renderCalendar();});
+$('#lanes').addEventListener('click',e=>{
+  const card=e.target.closest('[data-booking]'),close=e.target.closest('[data-close-booking]');
+  if(!card&&!close)return;
+  calendarBooking=card?.dataset.booking||'';renderCalendar();
+  if(card)$('#lanes [data-booking="'+calendarBooking+'"]')?.focus();
+});
 $$('.tabs button').forEach(b=>b.addEventListener('click',()=>selectTab(b.dataset.tab)));
 $$('.builder-nav [data-build]').forEach(b=>b.addEventListener('click',()=>selectBuilder(b.dataset.build)));
 $('#setup-summary').addEventListener('click',e=>{if(e.target.closest('[data-open-constructor]'))selectTab('constructor');});
-$$('[data-view]').forEach(b=>b.addEventListener('click',()=>{if(!data)return;view=b.dataset.view;$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));renderCalendar();}));
+$$('[data-view]').forEach(b=>b.addEventListener('click',()=>{if(!data)return;view=b.dataset.view;calendarResource='';calendarBooking='';$$('[data-view]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});renderCalendar();}));
 $('#booking-form [name=service_id]').addEventListener('change',updateBookingMasters);
 $('#block-form [name=resource_kind]').addEventListener('change',updateBlockResources);
 $('#booking-form').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/bookings',b=>({...b,service_id:+b.service_id,master_id:+b.master_id,start:salonTime(b.start),action_key:crypto.randomUUID()}),{reset:true});});

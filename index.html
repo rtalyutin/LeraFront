@@ -57,8 +57,8 @@
     <section id="workspace" hidden>
       <p id="workspace-status" class="muted" role="status" aria-live="polite" hidden></p>
       <div class="status-strip">
-        <span><b id="booking-count">0</b> записей</span>
-        <span><b id="room-pressure">0%</b> занято от часов графика кабинетов</span>
+        <span><b id="booking-count">0</b> записей на неделю</span>
+        <span><b id="room-pressure">0%</b> занято от недельного графика кабинетов</span>
         <span class="danger"><b id="issue-count">0</b> сбоев доставки</span>
       </div>
       <nav class="tabs" aria-label="Разделы">
@@ -94,7 +94,11 @@
       </section>
       <section id="calendar" class="tab-panel">
         <div id="setup-summary" class="setup-summary"></div>
-        <div class="view-switch"><button class="active" data-view="masters">По мастерам</button><button data-view="rooms">По кабинетам</button></div>
+        <div class="calendar-toolbar">
+          <div class="week-navigation" role="group" aria-label="Выбор недели"><button id="week-prev" type="button" aria-label="Предыдущая неделя">←</button><div><span class="eyebrow">Вся неделя</span><h2 id="week-title"></h2></div><button id="week-next" type="button" aria-label="Следующая неделя">→</button><button id="week-today" type="button">Сегодня</button></div>
+          <div class="calendar-filters"><div class="view-switch" role="group" aria-label="Группировка записей"><button class="active" data-view="masters" aria-pressed="true">По мастерам</button><button data-view="rooms" aria-pressed="false">По кабинетам</button></div><label><span id="calendar-resource-label">Мастер</span><select id="calendar-resource" aria-label="Мастер календаря"><option value="">Все мастера</option></select></label></div>
+        </div>
+        <p id="calendar-week-status" class="muted" role="status" aria-live="polite"></p>
         <div id="lanes" class="lanes" aria-live="polite"></div>
       </section>
       <section id="manual" class="tab-panel" hidden>

@@ -62,7 +62,7 @@ const check = (name, fn) => {fn(); checks++; console.log('PASS ' + name);};
   await assert.rejects(run("api('/api/masters/attach',{scope:{salonId:'1',revision:1},method:'POST',body:'{}'})"), {name:'AbortError'});
   check('stale action is not sent with new salon header', () => assert.equal(requests.at(-1).path, '/api/constructor'));
   run('render=()=>renders.push(data.marker);loadExtras=scope=>extras.push(scope);');
-  const first = deferred(), second = deferred();let index=0;fetchImpl = () => [first,second][index++].promise;
+  const first = deferred(), second = deferred();let index=0;fetchImpl = () => index++===0?first.promise:second.promise;
   const firstLoad = run('load()'), secondLoad = run('load()');
   second.resolve(response({marker:'new'}));await secondLoad;
   first.resolve(response({marker:'old'}));await assert.rejects(firstLoad, {name:'AbortError'});
