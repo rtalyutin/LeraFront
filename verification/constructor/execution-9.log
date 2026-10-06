@@ -1,0 +1,369 @@
+Initializing PGLite with database: memory://
+Debug level: 0
+PGlite database initialized
+PGLiteSocketServer listening on {"port":5561,"host":"127.0.0.1"}
+Running command: python /workspace/scratch/07da07074d5e/constructor/independent-checks/run-qa.py
+Setting DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5561/postgres
+Client connected from 127.0.0.1:47516
+ENGINE PostgreSQL 18.3 (PGlite 0.5.8) on wasm32-unknown-emscripten, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74 (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit
+Client connected from 127.0.0.1:47530
+ROLE ('constructor_fixture', False, False)
+Client connected from 127.0.0.1:47546
+Client connected from 127.0.0.1:47548
+Client connected from 127.0.0.1:47564
+Client connected from 127.0.0.1:47570
+Client connected from 127.0.0.1:47578
+Client connected from 127.0.0.1:47580
+Client connected from 127.0.0.1:47586
+Client connected from 127.0.0.1:47602
+Client connected from 127.0.0.1:47616
+FIXTURE {'service_id': 1, 'master_id': 1, 'room_id': 1, 'salon_id': 1, 'username': 'ux_admin', 'password': 'Synthetic-ux-qa-password-only'}
+test_batch_never_cancels_bookings_even_with_acknowledgement (__main__.IndependentBackend.test_batch_never_cancels_bookings_even_with_acknowledgement) ... Client connected from 127.0.0.1:47630
+Client connected from 127.0.0.1:47640
+Client connected from 127.0.0.1:47646
+Client connected from 127.0.0.1:47662
+Client connected from 127.0.0.1:47666
+Client connected from 127.0.0.1:47672
+Client connected from 127.0.0.1:47684
+Client connected from 127.0.0.1:47688
+Client connected from 127.0.0.1:47690
+Client connected from 127.0.0.1:47702
+Client connected from 127.0.0.1:47718
+ok
+test_cross_salon_draft_and_save_rejected (__main__.IndependentBackend.test_cross_salon_draft_and_save_rejected) ... Client connected from 127.0.0.1:47730
+Client connected from 127.0.0.1:47746
+Client connected from 127.0.0.1:47752
+Client connected from 127.0.0.1:47762
+Client connected from 127.0.0.1:47778
+Client connected from 127.0.0.1:47782
+Client connected from 127.0.0.1:47788
+Client connected from 127.0.0.1:47794
+Client connected from 127.0.0.1:47808
+Client connected from 127.0.0.1:47812
+Client connected from 127.0.0.1:47828
+ok
+test_database_error_on_second_insert_rolls_back_first_day_and_audit (__main__.IndependentBackend.test_database_error_on_second_insert_rolls_back_first_day_and_audit) ... Client connected from 127.0.0.1:47838
+Client connected from 127.0.0.1:47844
+Client connected from 127.0.0.1:47860
+Client connected from 127.0.0.1:47876
+Client connected from 127.0.0.1:47890
+Client connected from 127.0.0.1:47898
+Client connected from 127.0.0.1:47900
+Client connected from 127.0.0.1:47908
+INJECTED_INSERT_ERROR received 0 results from command 'ROLLBACK'
+Client connected from 127.0.0.1:47918
+Client connected from 127.0.0.1:47920
+ok
+test_http_auth_csrf_and_salon_isolation (__main__.IndependentBackend.test_http_auth_csrf_and_salon_isolation) ... Client connected from 127.0.0.1:47934
+Client connected from 127.0.0.1:47946
+Client connected from 127.0.0.1:47948
+Client connected from 127.0.0.1:47960
+Client connected from 127.0.0.1:47968
+Client connected from 127.0.0.1:47972
+Client connected from 127.0.0.1:47974
+Client connected from 127.0.0.1:47986
+Client connected from 127.0.0.1:47992
+Client connected from 127.0.0.1:48002
+Client connected from 127.0.0.1:48012
+Client connected from 127.0.0.1:48014
+Client connected from 127.0.0.1:48030
+Client connected from 127.0.0.1:48038
+Client connected from 127.0.0.1:48052
+Client connected from 127.0.0.1:48054
+Client connected from 127.0.0.1:48056
+Client connected from 127.0.0.1:48064
+Client connected from 127.0.0.1:48076
+Client connected from 127.0.0.1:48078
+Client connected from 127.0.0.1:48086
+Client connected from 127.0.0.1:48092
+Client connected from 127.0.0.1:48098
+Client connected from 127.0.0.1:48112
+Client connected from 127.0.0.1:48124
+Client connected from 127.0.0.1:48134
+Client connected from 127.0.0.1:48138
+Client connected from 127.0.0.1:48150
+ok
+test_invalid_second_day_does_not_write_first_day (__main__.IndependentBackend.test_invalid_second_day_does_not_write_first_day) ... Client connected from 127.0.0.1:48156
+Client connected from 127.0.0.1:48164
+Client connected from 127.0.0.1:48176
+Client connected from 127.0.0.1:48180
+Client connected from 127.0.0.1:48190
+Client connected from 127.0.0.1:48202
+Client connected from 127.0.0.1:48216
+ok
+test_preserves_unselected_weekday (__main__.IndependentBackend.test_preserves_unselected_weekday) ... Client connected from 127.0.0.1:48232
+Client connected from 127.0.0.1:48234
+Client connected from 127.0.0.1:48250
+Client connected from 127.0.0.1:48252
+Client connected from 127.0.0.1:48268
+Client connected from 127.0.0.1:48270
+Client connected from 127.0.0.1:48278
+Client connected from 127.0.0.1:48284
+ok
+test_saved_preview_matches_engine_without_any_writes (__main__.IndependentBackend.test_saved_preview_matches_engine_without_any_writes) ... Client connected from 127.0.0.1:48286
+Client connected from 127.0.0.1:48292
+Client connected from 127.0.0.1:48294
+Client connected from 127.0.0.1:48304
+Client connected from 127.0.0.1:48314
+Client connected from 127.0.0.1:48320
+Client connected from 127.0.0.1:48330
+Client connected from 127.0.0.1:48344
+Client connected from 127.0.0.1:53048
+ok
+test_two_resource_draft_intersection_is_manual_expected_window (__main__.IndependentBackend.test_two_resource_draft_intersection_is_manual_expected_window) ... Client connected from 127.0.0.1:53056
+Client connected from 127.0.0.1:53070
+Client connected from 127.0.0.1:53082
+Client connected from 127.0.0.1:53088
+Client connected from 127.0.0.1:53090
+Client connected from 127.0.0.1:53098
+Client connected from 127.0.0.1:53114
+Client connected from 127.0.0.1:53120
+ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 4.991s
+
+OK
+Client connected from 127.0.0.1:53122
+Client connected from 127.0.0.1:53124
+Client connected from 127.0.0.1:53134
+Client connected from 127.0.0.1:53138
+Client connected from 127.0.0.1:53142
+Client connected from 127.0.0.1:53146
+Client connected from 127.0.0.1:53148
+Client connected from 127.0.0.1:53164
+Client connected from 127.0.0.1:53170
+Client connected from 127.0.0.1:53172
+Client connected from 127.0.0.1:53182
+Client connected from 127.0.0.1:53184
+Client connected from 127.0.0.1:53198
+Client connected from 127.0.0.1:53206
+Client connected from 127.0.0.1:53214
+Client connected from 127.0.0.1:53230
+Client connected from 127.0.0.1:53232
+Client connected from 127.0.0.1:53248
+Client connected from 127.0.0.1:53262
+Client connected from 127.0.0.1:53274
+Client connected from 127.0.0.1:53278
+Client connected from 127.0.0.1:53294
+Client connected from 127.0.0.1:53300
+Client connected from 127.0.0.1:53314
+Client connected from 127.0.0.1:53316
+PASS read-only saved availability renders real slots
+Client connected from 127.0.0.1:53328
+Client connected from 127.0.0.1:53336
+Client connected from 127.0.0.1:53338
+Client connected from 127.0.0.1:53348
+PASS common editor updates all seven working days and calculates break
+PASS switching individual and common preserves common hours
+PASS mixed individual hours do not silently flatten
+PASS closing all days and re-opening one creates actual work hours
+Client connected from 127.0.0.1:53356
+Client connected from 127.0.0.1:53358
+Client connected from 127.0.0.1:53360
+Client connected from 127.0.0.1:53362
+PASS master and room drafts combine and survive navigation
+Client connected from 127.0.0.1:53372
+Client connected from 127.0.0.1:53374
+Client connected from 127.0.0.1:53388
+Client connected from 127.0.0.1:53398
+Client connected from 127.0.0.1:53404
+Client connected from 127.0.0.1:53420
+Client connected from 127.0.0.1:53428
+Client connected from 127.0.0.1:53434
+PASS changed date wins over older late preview
+Client connected from 127.0.0.1:53444
+Client connected from 127.0.0.1:53456
+Client connected from 127.0.0.1:53470
+Client connected from 127.0.0.1:53482
+Client connected from 127.0.0.1:53498
+Client connected from 127.0.0.1:53512
+Client connected from 127.0.0.1:53516
+Client connected from 127.0.0.1:53520
+PASS save one of two drafts remains in schedule and re-enables controls
+Client connected from 127.0.0.1:53532
+Client connected from 127.0.0.1:53542
+Client connected from 127.0.0.1:53548
+Client connected from 127.0.0.1:53554
+Client connected from 127.0.0.1:53560
+Client connected from 127.0.0.1:53572
+Client connected from 127.0.0.1:53580
+Client connected from 127.0.0.1:53594
+Client connected from 127.0.0.1:53608
+Client connected from 127.0.0.1:53610
+Client connected from 127.0.0.1:53616
+Client connected from 127.0.0.1:53630
+Client connected from 127.0.0.1:53636
+Client connected from 127.0.0.1:53652
+Client connected from 127.0.0.1:53654
+Client connected from 127.0.0.1:53658
+Client connected from 127.0.0.1:53672
+Client connected from 127.0.0.1:53684
+Client connected from 127.0.0.1:53686
+Client connected from 127.0.0.1:53692
+Client connected from 127.0.0.1:53696
+PASS saving last draft enters VK and schedule re-entry is editable
+Client connected from 127.0.0.1:53702
+Client connected from 127.0.0.1:53712
+Client connected from 127.0.0.1:53722
+Client connected from 127.0.0.1:53730
+Client connected from 127.0.0.1:53734
+Client connected from 127.0.0.1:53746
+Client connected from 127.0.0.1:53750
+Client connected from 127.0.0.1:53764
+Client connected from 127.0.0.1:53768
+PASS invalid draft prevents request and preserves previous saved state
+PASS service and resource create/edit controls remain available with name mappings
+PASS unsaved schedule blocks new salon and logout until explicit discard
+Client connected from 127.0.0.1:53784
+Client connected from 127.0.0.1:53786
+Client connected from 127.0.0.1:53798
+Client connected from 127.0.0.1:53806
+Client connected from 127.0.0.1:53808
+Client connected from 127.0.0.1:53824
+Client connected from 127.0.0.1:53838
+Client connected from 127.0.0.1:53848
+Client connected from 127.0.0.1:53864
+Client connected from 127.0.0.1:53874
+Client connected from 127.0.0.1:53880
+Client connected from 127.0.0.1:53896
+Client connected from 127.0.0.1:53910
+Client connected from 127.0.0.1:53914
+Client connected from 127.0.0.1:53920
+Client connected from 127.0.0.1:53922
+Client connected from 127.0.0.1:53938
+Client connected from 127.0.0.1:53950
+Client connected from 127.0.0.1:53960
+Client connected from 127.0.0.1:53972
+Client connected from 127.0.0.1:53986
+Client connected from 127.0.0.1:53994
+Client connected from 127.0.0.1:54008
+Client connected from 127.0.0.1:54016
+Client connected from 127.0.0.1:54032
+Client connected from 127.0.0.1:54042
+Client connected from 127.0.0.1:54048
+Client connected from 127.0.0.1:54050
+Client connected from 127.0.0.1:54052
+Client connected from 127.0.0.1:54060
+PASS salon create and rename work and incomplete schedule has explicit empty state
+Client connected from 127.0.0.1:54076
+Client connected from 127.0.0.1:54088
+Client connected from 127.0.0.1:54102
+Client connected from 127.0.0.1:54108
+Client connected from 127.0.0.1:54122
+Client connected from 127.0.0.1:54124
+Client connected from 127.0.0.1:54134
+Client connected from 127.0.0.1:54146
+Client connected from 127.0.0.1:54150
+Client connected from 127.0.0.1:54164
+Client connected from 127.0.0.1:54166
+Client connected from 127.0.0.1:54170
+Client connected from 127.0.0.1:54182
+Client connected from 127.0.0.1:54198
+Client connected from 127.0.0.1:54210
+Client connected from 127.0.0.1:54218
+Client connected from 127.0.0.1:54228
+Client connected from 127.0.0.1:54242
+Client connected from 127.0.0.1:54250
+Client connected from 127.0.0.1:54266
+Client connected from 127.0.0.1:54280
+Client connected from 127.0.0.1:54284
+Client connected from 127.0.0.1:54288
+Client connected from 127.0.0.1:54294
+Client connected from 127.0.0.1:54310
+Client connected from 127.0.0.1:54312
+Client connected from 127.0.0.1:54318
+Client connected from 127.0.0.1:54322
+Client connected from 127.0.0.1:54338
+Client connected from 127.0.0.1:54346
+Client connected from 127.0.0.1:54348
+Client connected from 127.0.0.1:54354
+Client connected from 127.0.0.1:54364
+Client connected from 127.0.0.1:54372
+Client connected from 127.0.0.1:54380
+Client connected from 127.0.0.1:54396
+Client connected from 127.0.0.1:54410
+Client connected from 127.0.0.1:54414
+Client connected from 127.0.0.1:54420
+Client connected from 127.0.0.1:54430
+Client connected from 127.0.0.1:54446
+Client connected from 127.0.0.1:54462
+Client connected from 127.0.0.1:54478
+Client connected from 127.0.0.1:54480
+Client connected from 127.0.0.1:54490
+Client connected from 127.0.0.1:54496
+Client connected from 127.0.0.1:54500
+Client connected from 127.0.0.1:54502
+Client connected from 127.0.0.1:54518
+Client connected from 127.0.0.1:54522
+Client connected from 127.0.0.1:54526
+Client connected from 127.0.0.1:54538
+Client connected from 127.0.0.1:54546
+Client connected from 127.0.0.1:54550
+Client connected from 127.0.0.1:54560
+Client connected from 127.0.0.1:54566
+Client connected from 127.0.0.1:54582
+Client connected from 127.0.0.1:54590
+Client connected from 127.0.0.1:54606
+Client connected from 127.0.0.1:54612
+Client connected from 127.0.0.1:54622
+Client connected from 127.0.0.1:54636
+Client connected from 127.0.0.1:54638
+Client connected from 127.0.0.1:54652
+Client connected from 127.0.0.1:54660
+Client connected from 127.0.0.1:54662
+Client connected from 127.0.0.1:54666
+Client connected from 127.0.0.1:54674
+Client connected from 127.0.0.1:54676
+Client connected from 127.0.0.1:54690
+Client connected from 127.0.0.1:54692
+Client connected from 127.0.0.1:54702
+Client connected from 127.0.0.1:54708
+Client connected from 127.0.0.1:54716
+Client connected from 127.0.0.1:54720
+Client connected from 127.0.0.1:54726
+Client connected from 127.0.0.1:54730
+Client connected from 127.0.0.1:54734
+Client connected from 127.0.0.1:54738
+Client connected from 127.0.0.1:56182
+Client connected from 127.0.0.1:56194
+Client connected from 127.0.0.1:56198
+Client connected from 127.0.0.1:56200
+Client connected from 127.0.0.1:56202
+Client connected from 127.0.0.1:56216
+Client connected from 127.0.0.1:56222
+Client connected from 127.0.0.1:56228
+Client connected from 127.0.0.1:56240
+Client connected from 127.0.0.1:56250
+Client connected from 127.0.0.1:56260
+Client connected from 127.0.0.1:56272
+Client connected from 127.0.0.1:56280
+Client connected from 127.0.0.1:56284
+Client connected from 127.0.0.1:56298
+Client connected from 127.0.0.1:56300
+Client connected from 127.0.0.1:56314
+Client connected from 127.0.0.1:56318
+Client connected from 127.0.0.1:56324
+PASS UI creates service, master, room mappings and edits their names
+PASS room helper switches to correct room when resource IDs differ
+Client connected from 127.0.0.1:56328
+Client connected from 127.0.0.1:56334
+Client connected from 127.0.0.1:56350
+Client connected from 127.0.0.1:56352
+Client connected from 127.0.0.1:56356
+Client connected from 127.0.0.1:56358
+Client connected from 127.0.0.1:56362
+Client connected from 127.0.0.1:56370
+Client connected from 127.0.0.1:56376
+PASS header salon selection waits for explicit discard and switches to requested salon
+Client connected from 127.0.0.1:56382
+Client connected from 127.0.0.1:56398
+Client connected from 127.0.0.1:56400
+Client connected from 127.0.0.1:56408
+Client connected from 127.0.0.1:56412
+Client connected from 127.0.0.1:56428
+Client connected from 127.0.0.1:56430
+Client connected from 127.0.0.1:56442
+Client connected from 127.0.0.1:56450
+Client connected from 127.0.0.1:56452
+Command exited with code 0

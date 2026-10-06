@@ -24,7 +24,7 @@ const sandbox={document:{querySelector:element,querySelectorAll:s=>groups.get(s)
   window:{location:{origin:'https://salon.example.test'},confirm(){throw new Error('No new popup');}},
   fetch(path,options){requests.push({path,options});return fetchImpl(path,options);}
 };
-vm.createContext(sandbox);vm.runInContext(fs.readFileSync(__dirname+'/app.js','utf8').replace("api('/api/session').then(acceptSession).catch(leaveWorkspace);",''),sandbox);
+vm.createContext(sandbox);vm.runInContext(fs.readFileSync(__dirname+'/app.js','utf8').replace("window.addEventListener('DOMContentLoaded',()=>api('/api/session').then(acceptSession).catch(leaveWorkspace),{once:true});",''),sandbox);
 const run=code=>vm.runInContext(code,sandbox),plain=value=>JSON.parse(JSON.stringify(value));
 const response=(value,ok=true)=>({ok,json:async()=>value});
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};

@@ -35,7 +35,7 @@ const sandbox = {
   window: {confirm: () => {throw new Error('Unexpected confirmation for stale salon');}},
   renders: [], extras: []
 };
-const code = fs.readFileSync(__dirname + '/app.js', 'utf8').replace("api('/api/session').then(acceptSession).catch(leaveWorkspace);", '');
+const code = fs.readFileSync(__dirname + '/app.js', 'utf8').replace("window.addEventListener('DOMContentLoaded',()=>api('/api/session').then(acceptSession).catch(leaveWorkspace),{once:true});", '');
 vm.createContext(sandbox); vm.runInContext(code, sandbox);
 const run = code => vm.runInContext(code, sandbox);
 const plain = value => JSON.parse(JSON.stringify(value));
