@@ -71,6 +71,20 @@ main { padding:clamp(1rem,3vw,3rem) clamp(1rem,4vw,4rem); }
 .metadata-fields { display:grid; gap:1rem; }
 .metadata-record { min-width:0; }
 .metadata-record input:disabled,.metadata-record select:disabled { color:var(--muted); background:var(--paper); opacity:1; }
+.vk-status-card { max-width:760px; border:2px solid var(--ink); padding:1.5rem; background:var(--card); box-shadow:8px 8px 0 var(--ink); overflow-wrap:anywhere; }
+.vk-status-card h2 { line-height:1.15; }
+.vk-actions { display:flex; flex-wrap:wrap; gap:.8rem; align-items:center; margin-top:1rem; }
+.button-link { display:inline-block; border:1px solid var(--ink); padding:.7rem 1rem; color:var(--ink); background:var(--acid); box-shadow:3px 3px 0 var(--ink); text-decoration:none; }
+.button-link:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
+.button-link:focus-visible,summary:focus-visible { outline:3px solid var(--hot); outline-offset:3px; }
+.vk-steps { display:flex; flex-wrap:wrap; gap:.5rem; padding:0; list-style:none; margin-top:1.5rem; }
+.vk-steps li { border:1px solid var(--line); padding:.4rem .7rem; }
+.vk-steps li.current { border-color:var(--ink); background:var(--acid); font-weight:700; }
+.vk-help { font-weight:400; }
+.vk-help summary { cursor:pointer; font-weight:700; }
+.vk-help li { margin:.6rem 0; }
+.vk-notice { max-width:760px; padding:1rem; border:1px solid var(--ink); border-left:6px solid var(--hot); background:var(--card); white-space:pre-wrap; overflow-wrap:anywhere; }
+.vk-confirm { border-top:1px solid var(--line); margin-top:1.5rem; padding-top:.5rem; }
 input:focus-visible,select:focus-visible,button:focus-visible { outline:3px solid var(--hot); outline-offset:3px; }
 button:disabled { opacity:.45; cursor:default; transform:none; }
 @media (max-width:700px) {
@@ -79,6 +93,7 @@ button:disabled { opacity:.45; cursor:default; transform:none; }
   .status-strip { grid-template-columns:1fr; }
   .lane { grid-template-columns:1fr; }
   .editor { grid-template-columns:1fr; box-shadow:4px 4px 0 var(--ink); }
+  .vk-status-card { box-shadow:4px 4px 0 var(--ink); }
   .interval-row { grid-template-columns:1fr 1fr; }
   .editor .interval-row button { grid-column:1/-1; }
 }

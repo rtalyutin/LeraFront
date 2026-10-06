@@ -12,7 +12,8 @@ function element(key) {
     reset() {this.resets++;this.value = '';}, replaceChildren() {this.innerHTML = '';},
     querySelector(selector) {return element(key + ' ' + selector);},
     querySelectorAll(selector) {return selectorGroups.get(key + ' ' + selector) || [];},
-    removeAttribute(name) {if(name === 'disabled') this.disabled = false;}
+    removeAttribute(name) {if(name === 'disabled') this.disabled = false;else delete this[name];},
+    setAttribute(name,value) {this[name]=value;}, focus() {}
   };
   Object.defineProperty(el, 'innerHTML', {get: () => html, set: value => {
     html = value;
@@ -27,7 +28,7 @@ let fetchImpl = async () => ({ok: true, json: async () => ({})});
 const sandbox = {
   document: {querySelector: element, querySelectorAll: s => selectorGroups.get(s) || []},
   Intl, Date, Number, String, Object, Array, JSON, Set, Map, Promise, Error, DOMException, AbortController,
-  setTimeout() {}, crypto: {randomUUID: () => 'test-action'},
+  setTimeout() {}, clearTimeout() {}, URL, crypto: {randomUUID: () => 'test-action'},
   localStorage: {getItem: k => storage.get(k), setItem: (k,v) => storage.set(k,v)},
   fetch: (path, options) => {requests.push({path, options}); return fetchImpl(path, options);},
   FormData: class {constructor() {} [Symbol.iterator]() {return [][Symbol.iterator]();}},
