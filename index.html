@@ -9,7 +9,7 @@
 <body>
   <header class="masthead">
     <div><span class="eyebrow">Диспетчерская салона</span><h1>Сегодня без накладок</h1></div>
-    <div class="head-tools"><label id="salon-picker" hidden>Салон <select id="salon-select" aria-label="Текущий салон"></select></label><label>Дата <input id="day" type="date"></label><button id="reload">Обновить</button><button id="logout" hidden>Выйти</button></div>
+    <div class="head-tools"><label id="salon-picker" hidden>Салон <select id="salon-select" aria-label="Текущий салон"></select></label><button id="salon-add" hidden>Добавить салон</button><label>Дата <input id="day" type="date"></label><button id="reload">Обновить</button><button id="logout" hidden>Выйти</button></div>
   </header>
   <main>
     <section id="auth" class="gate">
@@ -25,11 +25,20 @@
         <span class="danger"><b id="issue-count">0</b> сбоев доставки</span>
       </div>
       <nav class="tabs" aria-label="Разделы">
+        <button data-tab="salon">Салон</button>
         <button class="active" data-tab="calendar">Календарь</button>
         <button data-tab="manual">Новая запись</button>
         <button data-tab="block">Блокировка</button>
         <button data-tab="constructor">Конструктор салона</button>
+        <button data-tab="vk">ВК-бот</button>
       </nav>
+      <section id="salon" class="tab-panel" hidden>
+        <div class="builder-head"><span class="eyebrow">Сначала ваш салон</span><h2>Здесь начинается работа</h2><p>Создайте салон, настройте услуги и рабочие часы, затем подключите ВК-бота.</p></div>
+        <p id="salon-management-message" class="muted" role="status" aria-live="polite" hidden></p>
+        <form id="salon-create-form" class="editor" hidden><h2>Создать салон</h2><p class="muted full-width">Вы станете администратором этого салона и сможете изменить его название позже.</p><label class="full-width">Название салона<input id="salon-create-name" name="name" type="text" maxlength="200" required placeholder="Например, Лера"></label><button id="salon-create-submit">Создать салон</button><button id="salon-create-cancel" type="button" hidden>Отмена</button></form>
+        <form id="salon-details-form" class="editor" hidden><h2>Ваш салон</h2><label class="full-width">Название салона<input id="salon-edit-name" name="name" type="text" maxlength="200" required></label><button id="salon-save">Сохранить название</button></form>
+        <div id="salon-next-steps" class="builder-head" hidden><h2>Дальше настройте работу</h2><p>Добавьте услуги, мастеров, кабинеты и рабочие часы. Затем подключите сообщество ВК, чтобы принимать записи в сообщениях.</p><div class="vk-actions"><button id="salon-open-constructor" type="button">Настроить услуги и часы</button><button id="salon-open-vk" type="button">Подключить ВК-бота</button></div></div>
+      </section>
       <section id="calendar" class="tab-panel">
         <div id="setup-summary" class="setup-summary"></div>
         <div class="view-switch"><button class="active" data-view="masters">По мастерам</button><button data-view="rooms">По кабинетам</button></div>
@@ -89,6 +98,31 @@
             <div id="metadata-entities" class="resource-list"></div>
           </div>
         </section>
+      </section>
+      <section id="vk" class="tab-panel" hidden>
+        <div class="builder-head"><span class="eyebrow">Запись из сообщества</span><h2>Подключите ВК-бота к салону</h2><p>Клиенты смогут записываться в сообщениях вашего сообщества. Подключение относится к выбранному салону.</p></div>
+        <p id="vk-loading" class="muted" role="status" aria-live="polite" hidden>Загружаем состояние подключения…</p>
+        <p id="vk-error" class="vk-notice" role="alert" hidden></p>
+        <form id="vk-connect-form" class="editor" autocomplete="off">
+          <h2>Сообщество и ключ</h2>
+          <label>Сообщество ВК<input id="vk-community" name="community" type="text" maxlength="200" placeholder="https://vk.com/club123456 или public123456" autocapitalize="none" spellcheck="false" required></label>
+          <label>Ключ доступа сообщества<input id="vk-token" name="token" type="password" maxlength="4096" autocomplete="off" autocapitalize="none" spellcheck="false" required aria-describedby="vk-token-help"></label>
+          <p id="vk-token-help" class="muted full-width">Ключ нужен один раз для подключения. После отправки поле очистится.</p>
+          <details class="vk-help full-width"><summary>Где взять ключ сообщества</summary><ol><li>Откройте управление вашим сообществом ВК и раздел работы с API.</li><li>Создайте ключ доступа сообщества с правами «Сообщения сообщества» (<code>messages</code>) и «Управление сообществом» (<code>manage</code>).</li><li>Скопируйте ключ и вставьте в поле выше.</li></ol><p>Приём событий и настройки бота подключим автоматически. Вводить адрес сервера не нужно.</p></details>
+          <button id="vk-connect-submit">Подключить</button>
+        </form>
+        <article id="vk-status-card" class="vk-status-card spaced-editor" hidden aria-labelledby="vk-status-title" aria-live="polite">
+          <span class="eyebrow">Состояние подключения</span><h2 id="vk-status-title"></h2>
+          <p id="vk-community-name"></p><a id="vk-community-link" target="_blank" rel="noopener noreferrer" hidden>Открыть сообщество</a>
+          <ol class="vk-steps" aria-label="Этапы подключения"><li data-vk-stage="input">Сообщество и ключ</li><li data-vk-stage="setup">Автонастройка</li><li data-vk-stage="ready">Бот готов</li></ol>
+          <p id="vk-step" class="muted" hidden></p><p id="vk-message"></p>
+          <p id="vk-cleanup-warning" class="vk-notice" hidden></p>
+          <div id="vk-recovery-help" class="vk-help" hidden><p>Если ВК просит удалить старый сервер, найдите его в настройках Callback API сообщества по этому адресу, удалите и повторите настройку.</p><label>Адрес сервера для проверки<input id="vk-recovery-url" type="text" readonly spellcheck="false" aria-label="Адрес сервера ВК для восстановления подключения"></label></div>
+          <div class="vk-actions"><a id="vk-open-bot" class="button-link" target="_blank" rel="noopener noreferrer" hidden>Открыть бота</a><button id="vk-check" type="button" hidden>Проверить подключение</button><button id="vk-retry" type="button" hidden>Повторить настройку</button><button id="vk-disconnect" type="button" hidden>Отключить</button></div>
+          <p id="vk-check-help" class="muted" hidden>Проверка обновляет состояние подключения и не отправляет сообщения людям.</p>
+          <div id="vk-disconnect-confirm" class="vk-confirm" hidden><p>Отключить ВК-бота от этого салона? Клиенты больше не смогут записываться через это подключение.</p><div class="vk-actions"><button id="vk-disconnect-accept" type="button">Отключить бота</button><button id="vk-disconnect-cancel" type="button">Отмена</button></div></div>
+        </article>
+        <button id="vk-refresh" type="button" class="spaced-editor">Обновить состояние</button>
       </section>
     </section>
     <aside id="toast" class="toast" role="status" aria-live="polite" hidden></aside>

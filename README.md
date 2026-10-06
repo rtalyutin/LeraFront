@@ -6,7 +6,9 @@ This is the existing synthetic salon admin UI, packaged as a separate Timeweb Ap
 
 ## Admin constructor
 
-An existing account can access several salons; there is no registration screen. Select the current salon in the header. Only salons returned by the authenticated session are offered. The previous selection is restored per username only if it is still accessible; otherwise the first available salon is selected. Switching clears catalog data, selected resource IDs and unfinished forms before loading the new salon. All salon requests send `X-Salon-Id`; login, session, logout and the salon list do not. Aborted or late responses from an earlier salon cannot update the current workspace.
+An existing account can access several salons; there is no registration screen. On the first authenticated login with no salons, the inline **Салон** panel asks for a salon name. Creating it makes the current account its administrator, selects the new salon and offers the next steps: services/hours, then VK. The same panel edits the selected salon's name. **Добавить салон** creates another salon without replacing prior memberships. A pending submission cannot be submitted twice; an uncertain creation result retains the same name and `action_key` for a safe retry. Cancel is disabled while creation is pending or its result is uncertain, so the retry key cannot be lost; a confirmed validation rejection allows editing and canceling again.
+
+Select the current salon in the header. Only salons returned by the authenticated session are offered. The previous selection is restored per username only if it is still accessible; otherwise the first available salon is selected. Switching clears catalog data, selected resource IDs, unfinished forms and VK state before loading the new salon. All salon requests send `X-Salon-Id`; login, session, logout and `/api/salons` do not. `POST /api/salons` sends `{name, action_key}` with CSRF; `GET /api/salon` and `POST /api/salon` use the selected scope, and the edit body contains only `{name}`. Aborted or late responses from an earlier salon cannot update the current workspace. Canceling extra-salon creation restores the cached selected workspace without a new request. If VK was configuring or a VK request was interrupted, **Обновить состояние** resumes the state check before further VK actions.
 
 After login, use **Конструктор салона**:
 
@@ -24,7 +26,25 @@ The constructor starts empty on a new database. Existing records remain editable
 
 The calendar follows configured hours rather than a fixed 09:00–18:00 window. Manual booking and blocks use the salon's timezone, even when the browser uses another timezone. The frontend filters masters by the selected service; the backend makes the final availability and overlap checks. If a catalog or hours are incomplete, the booking engine returns no matching slots.
 
-Actual VK carousel photos still require uploaded photo IDs configured on the backend. Production split deployment has not been accepted. Run `node --check app.js` for a syntax check; local browser/API checks do not prove a Timeweb rollout.
+## VK connection
+
+In **ВК-бот**, enter a community URL or club/public ID and a community access key. The inline help explains where to create the key with `messages` and `manage` rights. The key is a password input and is cleared immediately after the request body is formed, before transport starts. It is sent only to `POST /api/vk/connect` with `{community, token, callback_origin: window.location.origin}`; it is never written to browser storage. Callback setup runs automatically; there is no editable callback-address input or OAuth button. Recovery help shows a read-only callback URL only for `callback_conflict` or a cleanup warning, including a retained disconnected URL. The address must match `/api/vk/callback/[a-f0-9]{32}` without credentials, query or fragment; malformed addresses are discarded. It is displayed as a plain input value, without a link or automatic navigation.
+
+`GET /api/vk` returns the public connection status. While `configuring`, one scoped read loop updates progress until a terminal state; transient read failures retry after five seconds. **Открыть бота** appears for a connected community. **Проверить подключение**, **Повторить настройку** and inline confirmed **Отключить** send empty JSON bodies to `/api/vk/check`, `/api/vk/retry` and `/api/vk/disconnect`. Checking does not send messages to people. Known command errors have safe, actionable text that remains visible after a status read; raw upstream errors are not displayed. An uncertain command result must be resolved by a successful status read before another mutation. Switching salons or logging out clears inputs/status, cancels pending scoped requests and stops polling; stale callbacks cannot update another salon.
+
+The UI consumes only the public status DTO (`available`, `status`, community/link fields, `step`, `message`, `error_code`, `cleanup_warning`). Backend connection configuration, encrypted key storage, real VK permissions/callback acceptance and production deployment are separate requirements. Actual VK carousel photos still require uploaded photo IDs configured on the backend. Production split deployment has not been accepted.
+
+Frontend verification (2026-10-06): all commands below passed against this source tree:
+
+```sh
+node --check app.js
+node test_frontend_contract.cjs  # 20 existing salon/constructor contract checks
+node test_vk_frontend.cjs       # 42 VK lifecycle/error/secret cleanup checks
+node test_salon_frontend.cjs    # 23 creation/edit/multi-salon/stale-response checks
+git diff --check
+```
+
+These 85 checks execute the shipped frontend functions with deterministic stub DOM, API and timers, using synthetic data only. They cover scoped/CSRF transport, single-flight requests, empty-account authentication, idempotent creation retry, read/save ordering, token cleanup before transport, actual backend progress/error codes, polling retries, inline disconnect, recovery URL validation/display, interrupted/canceled flow recovery and stale replies after switch/logout. Salon/VK routes, payloads, DTO fields and step/error codes were compared read-only with `admin_http.py` and `vk_connections.py`. A local Playwright launch failed because its Chromium headless executable is missing; a browser download also failed in the root verification environment. No new browser render, live VK connection, live backend integration or production rollout is claimed for this revision.
 
 Salon-aware frontend verification (2026-10-02): `node --check app.js` and `node test_frontend_contract.cjs` passed. The 20 contract checks execute the actual frontend functions with a stub DOM/fetch: salon/CSRF headers, stale action/response rejection, snapshot ordering, switch reset, valid session-only selection, typed values, core field exclusion, clearing obsolete reference targets, archived record exclusion and escaped/type-limited references. Routes and payloads were also compared read-only with the implemented `admin_http.py`, `constructor_store.py` and `salon_service.py`. This is not a browser-render or live-backend test. Local Playwright has no installed Chromium executable; the cloud browser rejected the local URL with `net::ERR_BLOCKED_BY_CLIENT`, so the new UI has not received a browser visual check in this environment.
 

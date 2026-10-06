@@ -5,6 +5,12 @@ const fmt = n => String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padSt
 const weekdays=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 let data=null, view='masters', csrf='', session=null, salonId='', salonRevision=0, snapshotRevision=0;
 let metadata=null, sharedMasters=[], extrasRevision=0;
+let vkStatus=null, vkBusy='', vkError='', vkReadBusy=false, vkNeedsRefresh=false;
+let vkRevision=0, vkPollTimer=null, vkReadController=null;
+let vkPollingPaused=false;
+let salonDetails=null, salonDetailsRevision=0, salonManagementRevision=0;
+let salonCreateMode=false, salonCreateBusy=false, salonSaveBusy=false, salonDetailsLoading=false;
+let salonCreateSubmission=null, salonReturnState=null, salonManagementMessage='', salonManagementError=false;
 const salonRequests=new Set();
 const publicApi=new Set(['/api/login','/api/logout','/api/session','/api/salons']);
 const context=()=>({salonId,revision:salonRevision});
@@ -18,6 +24,11 @@ async function api(path,options={}) {
   if(scoped&&(!salonId||!isCurrent(scope)))throw stale();
   const controller=scoped?new AbortController():null;
   if(controller)salonRequests.add(controller);
+  const callerSignal=fetchOptions.signal,abortFromCaller=()=>controller?.abort();
+  if(controller&&callerSignal){
+    if(callerSignal.aborted)controller.abort();
+    else callerSignal.addEventListener('abort',abortFromCaller,{once:true});
+  }
   const method=(fetchOptions.method||'GET').toUpperCase(),headers={...fetchOptions.headers};
   if(options.body!==undefined)headers['Content-Type']='application/json';
   if(method!=='GET'&&csrf)headers['X-CSRF-Token']=csrf;
@@ -27,7 +38,7 @@ async function api(path,options={}) {
     if(scoped&&!isCurrent(scope))throw stale();
     if(!response.ok){const e=new Error(body.message||body.error||'Не удалось выполнить запрос.');e.body=body;throw e;}
     return body;
-  }finally{if(controller)salonRequests.delete(controller);}
+  }finally{if(controller){salonRequests.delete(controller);callerSignal?.removeEventListener('abort',abortFromCaller);}}
 }
 function options(select,rows) {
   const old=select.value;
@@ -112,8 +123,265 @@ async function load(){
   const scope=context(),revision=++snapshotRevision;
   const snapshot=await api('/api/snapshot?date='+encodeURIComponent($('#day').value),{scope});
   if(!isCurrent(scope)||revision!==snapshotRevision)throw stale();
-  data=snapshot;$$('#workspace button').forEach(b=>b.disabled=false);render();$('#workspace-status').hidden=true;
+  data=snapshot;$$('#workspace button').forEach(b=>b.disabled=false);render();renderVk();renderSalonManagement();$('#workspace-status').hidden=true;
   loadExtras(scope);
+}
+const vkTitles={disconnected:'Бот пока не подключён',configuring:'Настраиваем ВК',connected:'ВК-бот подключён',needs_attention:'Нужно проверить подключение'};
+const vkMessages={disconnected:'Укажите сообщество и его ключ доступа, чтобы начать.',configuring:'Настраиваем сообщество автоматически. Состояние обновляется без перезагрузки.',connected:'Подключение готово. Откройте бота в сообщениях сообщества.',needs_attention:'Повторите настройку или подключите сообщество с новым ключом.'};
+const vkSteps={callback:'Подключаем приём событий',messages:'Включаем сообщения сообщества',checking:'Проверяем подключение',ready:'Настройка завершена',disconnected:'Подключение отключено'};
+function safeVkUrl(value){
+  if(typeof value!=='string')return '';
+  try{
+    const url=new URL(value);
+    if(url.protocol!=='https:'||!['vk.com','www.vk.com','m.vk.com','vk.me'].includes(url.hostname)||url.username||url.password)return '';
+    if([...url.searchParams.keys()].some(key=>/token|secret|access_key/i.test(key)))return '';
+    return url.href;
+  }catch{return '';}
+}
+function safeVkRecoveryUrl(value){
+  if(typeof value!=='string')return '';
+  try{
+    const url=new URL(value),local=url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname);
+    if((url.protocol!=='https:'&&!local)||url.username||url.password||url.search||url.hash)return '';
+    if(!/^\/api\/vk\/callback\/[a-f0-9]{32}$/.test(url.pathname))return '';
+    return url.href;
+  }catch{return '';}
+}
+function publicVkStatus(value){
+  if(!value||typeof value.available!=='boolean'||!Object.hasOwn(vkTitles,value.status))throw new Error('Некорректное состояние подключения ВК.');
+  const result={available:value.available,status:value.status,community_id:Number.isSafeInteger(value.community_id)&&value.community_id>0?value.community_id:null};
+  for(const key of ['community_name','community_url','bot_url','callback_url','step','message','error_code','cleanup_warning'])result[key]=typeof value[key]==='string'?value[key]:null;
+  result.callback_url=safeVkRecoveryUrl(result.callback_url)||null;
+  return result;
+}
+function stopVkPolling(){
+  if(vkPollTimer!==null)clearTimeout(vkPollTimer);vkPollTimer=null;
+  vkReadController?.abort();vkReadController=null;
+}
+function resetVk(){
+  ++vkRevision;stopVkPolling();vkStatus=null;vkBusy='';vkError='';vkReadBusy=false;vkNeedsRefresh=false;vkPollingPaused=false;
+  $('#vk-community').value='';$('#vk-token').value='';$('#vk-disconnect-confirm').hidden=true;
+  renderVk();
+}
+function canVkAction(action){
+  if(!salonId||!session||!vkStatus?.available||vkBusy||vkReadBusy||vkNeedsRefresh)return false;
+  const status=vkStatus.status;
+  if(action==='connect')return ['disconnected','needs_attention'].includes(status);
+  if(action==='retry')return status==='needs_attention';
+  if(action==='check')return ['connected','needs_attention'].includes(status);
+  if(action==='disconnect')return !!vkStatus.community_id&&status!=='disconnected';
+  return false;
+}
+function renderVk(){
+  const state=vkStatus,status=state?.status;
+  $('#vk-loading').hidden=!vkReadBusy||!!state;
+  $('#vk-error').textContent=vkError;$('#vk-error').hidden=!vkError;
+  $('#vk-connect-form').hidden=!!state&&(!state.available||!['disconnected','needs_attention'].includes(status));
+  if($('#vk-connect-form').hidden)$('#vk-token').value='';
+  $('#vk-community').disabled=!canVkAction('connect');$('#vk-token').disabled=!canVkAction('connect');
+  $('#vk-connect-submit').disabled=!canVkAction('connect');$('#vk-connect-submit').textContent=vkBusy==='connect'?'Подключаем…':'Подключить';
+  $('#vk-status-card').hidden=!state;
+  $('#vk-status-title').textContent=state?(state.available?vkTitles[status]:'Подключение ВК пока недоступно'):'';
+  $('#vk-message').textContent=state?(vkPollingPaused&&status==='configuring'?'Настройка продолжается на сервере. Нажмите «Обновить состояние», чтобы продолжить проверку.':state.message||(state.available?vkMessages[status]:'Попробуйте подключить сообщество позже.')):'';
+  $('#vk-community-name').textContent=state?.community_name||(state?.community_id?'Сообщество №'+state.community_id:'');
+  $('#vk-step').textContent=status==='configuring'?(vkSteps[state.step]||'Автонастройка сообщества'):'';$('#vk-step').hidden=status!=='configuring';
+  $('#vk-cleanup-warning').textContent=state?.cleanup_warning||'';$('#vk-cleanup-warning').hidden=!state?.cleanup_warning;
+  const recoveryUrl=(state?.error_code==='callback_conflict'||state?.cleanup_warning)?safeVkRecoveryUrl(state.callback_url):'';
+  $('#vk-recovery-url').value=recoveryUrl;$('#vk-recovery-help').hidden=!recoveryUrl;
+  const communityUrl=safeVkUrl(state?.community_url),botUrl=status==='connected'&&state.available?safeVkUrl(state.bot_url):'';
+  for(const [id,url] of [['vk-community-link',communityUrl],['vk-open-bot',botUrl]]){
+    const link=$('#'+id);link.hidden=!url;if(url)link.href=url;else link.removeAttribute('href');
+  }
+  const stage=status==='connected'?'ready':status==='configuring'?'setup':'input';
+  $$('[data-vk-stage]').forEach(el=>{const current=!!state&&state.available&&el.dataset.vkStage===stage;el.classList.toggle('current',current);if(current)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});
+  $('#vk-check').hidden=!['connected','needs_attention'].includes(status);$('#vk-check').disabled=!canVkAction('check');
+  $('#vk-check-help').hidden=$('#vk-check').hidden;
+  $('#vk-retry').hidden=status!=='needs_attention';$('#vk-retry').disabled=!canVkAction('retry');
+  $('#vk-disconnect').hidden=!state?.community_id||status==='disconnected';$('#vk-disconnect').disabled=!canVkAction('disconnect');
+  $('#vk-disconnect-accept').disabled=!canVkAction('disconnect');
+  $('#vk-disconnect-cancel').disabled=!!vkBusy;
+  if(!state||status==='disconnected'||!state.available)$('#vk-disconnect-confirm').hidden=true;
+  $('#vk-refresh').disabled=!salonId||!session||!!vkBusy;
+  $('#vk').setAttribute('aria-busy',String(!!vkBusy||vkReadBusy));
+}
+function scheduleVkPoll(scope,revision,delay=2500){
+  if(!isCurrent(scope)||revision!==vkRevision||vkStatus?.status!=='configuring'||!vkStatus.available)return;
+  vkPollTimer=setTimeout(()=>{vkPollTimer=null;if(isCurrent(scope)&&revision===vkRevision&&!vkBusy)loadVk(scope);},delay);
+}
+async function loadVk(scope=context(),{preserveError=false}={}){
+  if(!salonId||!session||!isCurrent(scope)||vkBusy)return;
+  const revision=++vkRevision;stopVkPolling();vkPollingPaused=false;
+  const controller=new AbortController();vkReadController=controller;vkReadBusy=true;
+  if(!preserveError)vkError='';renderVk();
+  let failed=false;
+  try{
+    const result=await api('/api/vk',{scope,signal:controller.signal});
+    if(!isCurrent(scope)||revision!==vkRevision)return;
+    vkStatus=publicVkStatus(result);vkNeedsRefresh=false;
+    if(!$('#vk-community').value&&vkStatus.community_id)$('#vk-community').value='club'+vkStatus.community_id;
+  }catch(error){
+    if(!isCurrent(scope)||revision!==vkRevision||error.name==='AbortError')return;
+    failed=true;vkError=(preserveError&&vkError?vkError+' ':'')+'Не удалось обновить состояние ВК. Нажмите «Обновить состояние», чтобы проверить подключение.';
+  }finally{
+    if(vkReadController===controller)vkReadController=null;
+    if(isCurrent(scope)&&revision===vkRevision){vkReadBusy=false;renderVk();scheduleVkPoll(scope,revision,failed?5000:2500);}
+  }
+}
+function vkActionError(error){
+  const code=error.body?.error_code||error.body?.error;
+  const messages={
+    invalid_community:'Укажите ссылку на сообщество ВК или его club/public ID.',
+    invalid_token:'Ключ доступа не подходит. Создайте ключ сообщества с правами messages и manage и подключите его снова.',
+    vk_permissions:'У ключа недостаточно прав. Создайте ключ сообщества с правами messages и manage.',
+    community_in_use:'Это сообщество уже подключено к другому салону. Выберите другое сообщество.',
+    disconnect_first:'Сначала отключите текущее сообщество, затем подключите другое.',
+    invalid_origin:'Адрес приложения не подходит для подключения. Откройте диспетчерскую по её обычному защищённому адресу.',
+    vk_unreachable:'ВК сейчас не отвечает. Проверьте состояние подключения и повторите попытку позже.',
+    vk_rate_limit:'ВК временно ограничил запросы. Проверьте состояние подключения и повторите попытку позже.',
+    vk_rejected:'ВК отклонил настройку. Проверьте ключ и права доступа к сообществу.',
+    vk_busy:'Настройка уже выполняется. Дождитесь обновления состояния.',
+    vk_unavailable:'Подключение ВК пока недоступно. Попробуйте позже.',
+    vk_credentials_unreadable:'Сохранённый ключ не удалось использовать. Подключите сообщество с новым ключом.',
+    vk_disconnected:'ВК-бот не подключён. Укажите сообщество и ключ доступа.',
+    vk_send_failed:'Не удалось отправить ответ клиенту. Проверьте ключ и права на сообщения, затем повторите настройку.',
+    callback_duplicates:'В сообществе найдено несколько серверов для этого подключения. Проверьте настройки приёма событий в ВК.',
+    callback_missing:'Приём событий сообщества не настроен. Повторите настройку.',
+    callback_uncertain:'Не удалось подтвердить приём событий. Проверьте состояние подключения перед повтором.',
+    callback_not_confirmed:'ВК ещё не подтвердил приём событий. Повторите настройку.',
+    callback_conflict:'В ВК уже есть сервер с этим адресом и другим секретом. Проверьте настройки приёма событий и повторите настройку.',
+    events_disabled:'События сообщений сообщества выключены. Повторите настройку.'
+  };
+  if(Object.hasOwn(messages,code))return messages[code];
+  if(code==='forbidden')return 'У аккаунта нет доступа к подключению ВК в этом салоне.';
+  if(code==='authentication_required')return 'Сессия завершилась. Войдите снова, чтобы управлять подключением ВК.';
+  if(code==='invalid_request')return 'Проверьте сообщество и ключ доступа с правами messages и manage, затем повторите подключение.';
+  if(code==='conflict')return 'Состояние подключения изменилось. Обновляем его перед следующим действием.';
+  return 'Не удалось завершить запрос ВК. Проверяем состояние подключения перед повтором.';
+}
+async function runVkAction(action,body='{}'){
+  if(!canVkAction(action))return;
+  const scope=context(),revision=++vkRevision;stopVkPolling();vkReadBusy=false;
+  vkBusy=action;vkError='';$('#vk-disconnect-confirm').hidden=true;renderVk();
+  let failed=false;
+  try{
+    const result=await api('/api/vk/'+action,{scope,method:'POST',body});
+    if(!isCurrent(scope)||revision!==vkRevision)return;
+    vkStatus=publicVkStatus(result);vkNeedsRefresh=false;
+  }catch(error){
+    if(!isCurrent(scope)||revision!==vkRevision||error.name==='AbortError')return;
+    failed=true;vkNeedsRefresh=true;vkError=vkActionError(error);
+  }finally{
+    if(isCurrent(scope)&&revision===vkRevision){
+      vkBusy='';renderVk();
+      if(failed)loadVk(scope,{preserveError:true});else scheduleVkPoll(scope,revision);
+    }
+  }
+}
+async function connectVk(){
+  if(!canVkAction('connect'))return;
+  const community=$('#vk-community').value.trim();
+  if(!community||!$('#vk-token').value.trim()){vkError='Укажите сообщество и его ключ доступа.';renderVk();return;}
+  const body=JSON.stringify({community,token:$('#vk-token').value.trim(),callback_origin:window.location.origin});
+  $('#vk-token').value='';
+  await runVkAction('connect',body);
+}
+function refreshSalonPicker(){
+  $('#salon-select').innerHTML=(session?.salons||[]).map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
+  if(salonId)$('#salon-select').value=salonId;
+  $('#salon-picker').hidden=!session?.salons.length;
+}
+function resetSalonManagement(){
+  ++salonDetailsRevision;++salonManagementRevision;
+  salonDetails=null;salonCreateMode=false;salonCreateBusy=false;salonSaveBusy=false;salonDetailsLoading=false;
+  salonCreateSubmission=null;salonReturnState=null;salonManagementMessage='';salonManagementError=false;
+  $('#salon-create-name').value='';$('#salon-edit-name').value='';renderSalonManagement();
+}
+function renderSalonManagement(){
+  $('#salon-add').hidden=!session;$('#salon-add').disabled=!session||salonCreateMode||salonCreateBusy;
+  $('#salon-select').disabled=salonCreateMode;$('#day').disabled=salonCreateMode||!salonId;$('#reload').disabled=salonCreateMode||!salonId;
+  $('#salon-create-form').hidden=!salonCreateMode;$('#salon-details-form').hidden=salonCreateMode||!salonId;
+  $('#salon-create-submit').disabled=!salonCreateMode||salonCreateBusy;
+  $('#salon-create-submit').textContent=salonCreateBusy?'Создаём…':salonCreateSubmission?'Повторить создание':'Создать салон';
+  $('#salon-create-name').disabled=salonCreateBusy||!!salonCreateSubmission;
+  $('#salon-create-cancel').hidden=!salonCreateMode||!salonReturnState;$('#salon-create-cancel').disabled=salonCreateBusy||!!salonCreateSubmission;
+  $('#salon-save').disabled=!salonDetails||salonSaveBusy||salonDetailsLoading||salonCreateMode;
+  $('#salon-edit-name').disabled=$('#salon-save').disabled;
+  $('#salon-save').textContent=salonSaveBusy?'Сохраняем…':'Сохранить название';
+  $('#salon-next-steps').hidden=salonCreateMode||!salonId;
+  $('#salon-open-constructor').disabled=!data||salonCreateMode;$('#salon-open-vk').disabled=!data||salonCreateMode;
+  const message=salonManagementMessage||(salonDetailsLoading?'Загружаем сведения о салоне…':'');
+  $('#salon-management-message').textContent=message;$('#salon-management-message').hidden=!message;
+  $('#salon-management-message').className=salonManagementError?'vk-notice':'muted';
+  $('#workspace .status-strip').hidden=salonCreateMode||!data;
+  $$('.tabs button').forEach(b=>b.disabled=!session||(b.dataset.tab!=='salon'&&(salonCreateMode||!data)));
+}
+function validSalonDetails(value,scope){
+  if(!value||String(value.id)!==scope.salonId||typeof value.name!=='string')throw new Error('Некорректные сведения о салоне.');
+  return {id:value.id,name:value.name};
+}
+async function loadSalonDetails(scope=context()){
+  if(!salonId||!session||!isCurrent(scope)||salonCreateMode||salonSaveBusy)return;
+  const revision=++salonDetailsRevision;salonDetailsLoading=true;salonManagementMessage='';salonManagementError=false;renderSalonManagement();
+  try{
+    const result=await api('/api/salon',{scope});
+    if(!isCurrent(scope)||revision!==salonDetailsRevision)return;
+    salonDetails=validSalonDetails(result,scope);$('#salon-edit-name').value=salonDetails.name;
+  }catch(error){
+    if(isCurrent(scope)&&revision===salonDetailsRevision&&error.name!=='AbortError'){salonManagementMessage='Не удалось загрузить название салона. Нажмите «Обновить», чтобы повторить.';salonManagementError=true;}
+  }finally{if(isCurrent(scope)&&revision===salonDetailsRevision){salonDetailsLoading=false;renderSalonManagement();}}
+}
+function startSalonCreation(){
+  if(!session||salonCreateMode||salonCreateBusy)return;
+  const saved=salonId?{salonId,data,metadata,sharedMasters,salonDetails,vkStatus,vkNeedsRefresh:vkNeedsRefresh||!!vkBusy||vkReadBusy,view,tab:$('.tabs button.active')?.dataset.tab||'salon',builder:$('.builder-nav button.active')?.dataset.build||'builder-services'}:null;
+  clearSalon();salonId='';salonCreateMode=true;salonReturnState=saved;
+  enterWorkspace();$('#workspace-status').hidden=true;selectTab('salon');renderSalonManagement();$('#salon-create-name').focus();
+}
+function cancelSalonCreation(){
+  if(!salonCreateMode||salonCreateBusy||salonCreateSubmission||!salonReturnState)return;
+  const saved=salonReturnState;clearSalon();
+  salonId=saved.salonId;data=saved.data;metadata=saved.metadata;sharedMasters=saved.sharedMasters;salonDetails=saved.salonDetails;vkStatus=saved.vkStatus;view=saved.view;
+  $('#salon-select').value=salonId;enterWorkspace();
+  if(data){$$('#workspace button').forEach(b=>b.disabled=false);render();if(metadata)renderMetadata();renderSharedMasters();}
+  if(salonDetails)$('#salon-edit-name').value=salonDetails.name;
+  vkPollingPaused=vkStatus?.status==='configuring';vkNeedsRefresh=!!saved.vkNeedsRefresh;
+  if(vkNeedsRefresh)vkError='Последний запрос был прерван. Нажмите «Обновить состояние», чтобы проверить подключение перед следующим действием.';
+  renderVk();renderSalonManagement();selectTab(saved.tab);selectBuilder(saved.builder);
+  // The cached workspace is restored without reading or restarting polling on cancel.
+}
+async function createSalon(){
+  if(!session||!salonCreateMode||salonCreateBusy)return;
+  const name=$('#salon-create-name').value.trim();
+  if(!salonCreateSubmission&&(!name||name.length>200)){salonManagementMessage='Укажите название салона длиной до 200 символов.';salonManagementError=true;renderSalonManagement();return;}
+  if(!salonCreateSubmission)salonCreateSubmission={name,action_key:crypto.randomUUID()};
+  const revision=salonManagementRevision,username=session.username;
+  salonCreateBusy=true;salonManagementMessage='';salonManagementError=false;renderSalonManagement();
+  try{
+    const result=await api('/api/salons',{method:'POST',body:JSON.stringify(salonCreateSubmission)});
+    if(!session||session.username!==username||revision!==salonManagementRevision||!salonCreateMode)return;
+    if(!Array.isArray(result.salons)||!result.salons.some(s=>String(s.id)===String(result.id))||typeof result.name!=='string')throw new Error('Неполный ответ о создании салона.');
+    session.salons=result.salons;refreshSalonPicker();salonCreateBusy=false;
+    await chooseSalon(result.id);
+    if(session?.username===username&&String(result.id)===salonId){selectTab('salon');salonManagementMessage='Салон создан. Теперь настройте услуги и рабочие часы, затем подключите ВК-бота.';renderSalonManagement();}
+  }catch(error){
+    if(!session||session.username!==username||revision!==salonManagementRevision||!salonCreateMode||error.name==='AbortError')return;
+    if(['invalid_request','forbidden','authentication_required','csrf_failed'].includes(error.body?.error)){
+      salonCreateSubmission=null;salonManagementMessage=error.body.error==='invalid_request'?'Проверьте название салона: от 1 до 200 символов.':'Не удалось создать салон. Проверьте доступ к аккаунту и повторите вход.';
+    }else salonManagementMessage='Создание ещё не подтверждено. Повторите создание с теми же данными — второй салон не появится. Отмена недоступна, пока результат не подтверждён.';
+    salonManagementError=true;
+  }finally{if(revision===salonManagementRevision&&session?.username===username){salonCreateBusy=false;renderSalonManagement();}}
+}
+async function saveSalonName(){
+  if(!salonDetails||!salonId||!session||salonCreateMode||salonSaveBusy||salonDetailsLoading)return;
+  const name=$('#salon-edit-name').value.trim();
+  if(!name||name.length>200){salonManagementMessage='Укажите название салона длиной до 200 символов.';salonManagementError=true;renderSalonManagement();return;}
+  const scope=context(),revision=++salonDetailsRevision;salonSaveBusy=true;salonManagementMessage='';salonManagementError=false;renderSalonManagement();
+  try{
+    const result=await api('/api/salon',{scope,method:'POST',body:JSON.stringify({name})});
+    if(!isCurrent(scope)||revision!==salonDetailsRevision)return;
+    salonDetails=validSalonDetails(result,scope);$('#salon-edit-name').value=salonDetails.name;
+    session.salons=session.salons.map(s=>String(s.id)===salonId?{...s,name:salonDetails.name}:s);refreshSalonPicker();salonManagementMessage='Название салона сохранено.';
+  }catch(error){if(isCurrent(scope)&&revision===salonDetailsRevision&&error.name!=='AbortError'){salonManagementMessage='Не удалось сохранить название салона. Обновите сведения и повторите попытку.';salonManagementError=true;}}
+  finally{if(isCurrent(scope)&&revision===salonDetailsRevision){salonSaveBusy=false;renderSalonManagement();}}
 }
 function updateBookingMasters(){
   if(!data)return;
@@ -269,20 +537,26 @@ async function loadExtras(scope){
   }else if(catalog.reason.name!=='AbortError'){$('#metadata-status').textContent=catalog.reason.message;$('#metadata-content').hidden=true;$('#metadata-type-create button').disabled=true;}
   if(masters.status==='fulfilled'){
     sharedMasters=masters.value.masters||[];
-    $('#master-attach [name=shared_master]').innerHTML=sharedMasters.map((m,i)=>'<option value="'+i+'">'+esc(m.name)+' · '+esc(m.source_salon_name)+'</option>').join('');
-    $('#master-attach button').disabled=!sharedMasters.length;
-    $('#shared-master-status').textContent=sharedMasters.length?'':'Нет мастеров из других доступных салонов, которых можно подключить.';
+    renderSharedMasters();
   }else if(masters.reason.name!=='AbortError'){$('#shared-master-status').textContent=masters.reason.message;$('#master-attach [name=shared_master]').replaceChildren();}
+}
+function renderSharedMasters(){
+  $('#master-attach [data-service-choices]').innerHTML=choices();
+  $('#master-attach [name=shared_master]').innerHTML=sharedMasters.map((m,i)=>'<option value="'+i+'">'+esc(m.name)+' · '+esc(m.source_salon_name)+'</option>').join('');
+  $('#master-attach button').disabled=!sharedMasters.length;
+  $('#shared-master-status').textContent=sharedMasters.length?'':'Нет мастеров из других доступных салонов, которых можно подключить.';
 }
 const resourceBody=form=>b=>({name:b.name,service_ids:new FormData(form).getAll('service_ids').map(Number),active:form.classList.contains('resource-create')?true:form.elements.active.checked});
 const today=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
 $('#day').value=today.year+'-'+today.month+'-'+today.day;
 function enterWorkspace(){
-  $('#auth').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;$('#salon-picker').hidden=false;
+  $('#auth').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;$('#salon-picker').hidden=!session?.salons.length;renderSalonManagement();
 }
 function clearSalon(){
   ++salonRevision;++snapshotRevision;++extrasRevision;
   salonRequests.forEach(c=>c.abort());salonRequests.clear();
+  resetVk();
+  resetSalonManagement();
   data=null;metadata=null;sharedMasters=[];
   $('#toast').hidden=true;
   $$('#workspace form').forEach(f=>f.reset());
@@ -295,6 +569,7 @@ function clearSalon(){
   $$('#workspace button').forEach(b=>b.disabled=true);
   view='masters';selectTab('calendar');selectBuilder('builder-services');
   $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  renderSalonManagement();
 }
 async function chooseSalon(id){
   if(!session?.salons.some(s=>String(s.id)===String(id)))return;
@@ -302,6 +577,8 @@ async function chooseSalon(id){
   try{localStorage.setItem('lera.salon.'+session.username,salonId);}catch{}
   enterWorkspace();$('#workspace-status').textContent='Загружаем выбранный салон…';$('#workspace-status').hidden=false;
   const scope=context();
+  loadVk(scope);
+  loadSalonDetails(scope);
   try{
     await load();
     if(isCurrent(scope)&&(!data.services.length||!data.masters.length||!data.rooms.length))selectTab('constructor');
@@ -312,13 +589,13 @@ async function chooseSalon(id){
 async function acceptSession(value){
   session=value;csrf=value.csrf_token;
   session.salons=Array.isArray(value.salons)?value.salons.filter(s=>s.id!==undefined&&typeof s.name==='string'):[];
-  if(!session.salons.length)throw new Error('Для этого аккаунта нет доступных салонов.');
-  $('#salon-select').innerHTML=session.salons.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
+  refreshSalonPicker();
+  if(!session.salons.length){startSalonCreation();return;}
   let restored='';try{restored=localStorage.getItem('lera.salon.'+session.username)||'';}catch{}
   const selected=session.salons.find(s=>String(s.id)===restored)||session.salons[0];
   await chooseSalon(selected.id);
 }
-function leaveWorkspace(){clearSalon();csrf='';session=null;salonId='';$('#salon-select').replaceChildren();$('#salon-picker').hidden=true;$('#workspace').hidden=true;$('#logout').hidden=true;$('#auth').hidden=false;}
+function leaveWorkspace(){clearSalon();csrf='';session=null;salonId='';$('#salon-select').replaceChildren();$('#salon-picker').hidden=true;$('#workspace').hidden=true;$('#logout').hidden=true;$('#auth').hidden=false;renderSalonManagement();}
 $('#auth-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const button=e.target.querySelector('button');if(button.disabled)return;button.disabled=true;
@@ -326,9 +603,9 @@ $('#auth-form').addEventListener('submit',async e=>{
   catch(err){leaveWorkspace();show(err.body?.error==='authentication_required'?'Неверный логин или пароль':err.message,true);}
   finally{button.disabled=false;}
 });
-$('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST',body:'{}'});}finally{leaveWorkspace();}});
+$('#logout').addEventListener('click',async()=>{const request=api('/api/logout',{method:'POST',body:'{}'});leaveWorkspace();try{await request;}catch(error){report(error);}});
 $('#salon-select').addEventListener('change',e=>chooseSalon(e.target.value));
-$('#reload').addEventListener('click',()=>csrf&&load().catch(report));
+$('#reload').addEventListener('click',()=>{if(csrf&&salonId&&!salonCreateMode){load().catch(report);loadSalonDetails();}});
 $('#day').addEventListener('change',()=>csrf&&load().catch(report));
 $$('.tabs button').forEach(b=>b.addEventListener('click',()=>selectTab(b.dataset.tab)));
 $$('.builder-nav button').forEach(b=>b.addEventListener('click',()=>selectBuilder(b.dataset.build)));
@@ -377,5 +654,18 @@ $('#metadata-entity-create').addEventListener('submit',e=>{e.preventDefault();su
   return {entity_type_id:Number(type.id),values:readValues(e.target,type)};
 },{reset:true});});
 $('#metadata-entities').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/constructor/entities/'+encodeURIComponent(e.target.dataset.id),()=>({values:readValues(e.target,selectedType(),e.target.dataset.core==='true')}));});
+$('#vk-connect-form').addEventListener('submit',e=>{e.preventDefault();connectVk();});
+$('#vk-refresh').addEventListener('click',()=>loadVk());
+$('#vk-check').addEventListener('click',()=>runVkAction('check'));
+$('#vk-retry').addEventListener('click',()=>runVkAction('retry'));
+$('#vk-disconnect').addEventListener('click',()=>{if(canVkAction('disconnect')){$('#vk-disconnect-confirm').hidden=false;$('#vk-disconnect-accept').focus();}});
+$('#vk-disconnect-cancel').addEventListener('click',()=>{$('#vk-disconnect-confirm').hidden=true;$('#vk-disconnect').focus();});
+$('#vk-disconnect-accept').addEventListener('click',()=>runVkAction('disconnect'));
+$('#salon-add').addEventListener('click',startSalonCreation);
+$('#salon-create-form').addEventListener('submit',e=>{e.preventDefault();createSalon();});
+$('#salon-create-cancel').addEventListener('click',cancelSalonCreation);
+$('#salon-details-form').addEventListener('submit',e=>{e.preventDefault();saveSalonName();});
+$('#salon-open-constructor').addEventListener('click',()=>{if(data&&!salonCreateMode){selectTab('constructor');selectBuilder('builder-services');}});
+$('#salon-open-vk').addEventListener('click',()=>{if(data&&!salonCreateMode)selectTab('vk');});
 $('#lanes').addEventListener('click',async e=>{const id=e.target.dataset.cancel;if(!id||e.target.disabled)return;const scope=context();e.target.disabled=true;try{await api('/api/bookings/'+id+'/cancel',{scope,method:'POST',body:JSON.stringify({action_key:crypto.randomUUID()})});if(!isCurrent(scope))return;show('Запись №'+id+' отменена');await load();}catch(err){if(isCurrent(scope)){e.target.disabled=false;report(err);}}});
 api('/api/session').then(acceptSession).catch(leaveWorkspace);
