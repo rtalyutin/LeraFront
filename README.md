@@ -6,6 +6,12 @@ This is the existing synthetic salon admin UI, packaged as a separate Timeweb Ap
 
 The pinned NGINX unprivileged image declares only `8080/tcp`, matching `listen 8080` in the template. The standard `nginx` image declares port 80 as well; adding `EXPOSE 8080` does not remove it and leaves Timeweb with two candidate HTTP ports. The image health check requests `http://127.0.0.1:8080/healthz` and fails if NGINX does not respond. If a health path is set in Timeweb, use `/healthz`; that panel setting takes priority over the Dockerfile check. No `PORT` variable is required. A failed deploy needs **application logs** as well as build/deploy logs: an absent or invalid `BACKEND_URL`, or failure to resolve its hostname when NGINX starts, can also prevent startup.
 
+## Entry screen
+
+The unauthenticated entry screen follows the approved cream/black/lime promo direction: service, master and time notes lead to an explicitly labelled example calendar booking. On wide screens the sign-in form sits beside the example; on narrow screens it follows the introduction, before the example. The illustration contains synthetic data and never reads or creates bookings.
+
+The existing login form and session/CSRF contract are retained. The separate **регистрация скоро** button is disabled and outside the login form: it does not submit, navigate or call a registration API. Guest users do not see the calendar's date/reload controls; the workspace header appears after authentication and hides on logout. `auth.css` is scoped to this entry section and included in the production Docker image.
+
 ## Admin constructor
 
 The setup workspace follows the approved light interface with a lime accent: a persistent step list, a weekly schedule editor and a client availability preview. The header switches between salons from the authenticated membership list. Services, masters, rooms, additional fields and VK continue to use the existing scoped admin APIs.

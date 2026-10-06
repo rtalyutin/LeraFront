@@ -546,6 +546,7 @@ const resourceBody=form=>b=>({name:b.name,service_ids:new FormData(form).getAll(
 const today=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
 $('#day').value=today.year+'-'+today.month+'-'+today.day;
 function enterWorkspace(){
+  $('#workspace-header').hidden=false;
   $('#auth').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;$('#salon-picker').hidden=!session?.salons.length;renderSalonManagement();
 }
 function clearSalon(){
@@ -594,7 +595,7 @@ async function acceptSession(value){
   const selected=session.salons.find(s=>String(s.id)===restored)||session.salons[0];
   await chooseSalon(selected.id);
 }
-function leaveWorkspace(){clearSalon();csrf='';session=null;salonId='';$('#salon-select').replaceChildren();$('#salon-picker').hidden=true;$('#workspace').hidden=true;$('#logout').hidden=true;$('#auth').hidden=false;renderSalonManagement();}
+function leaveWorkspace(){clearSalon();csrf='';session=null;salonId='';$('#salon-select').replaceChildren();$('#salon-picker').hidden=true;$('#workspace').hidden=true;$('#workspace-header').hidden=true;$('#logout').hidden=true;$('#auth').hidden=false;renderSalonManagement();}
 $('#auth-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const button=e.target.querySelector('button');if(button.disabled)return;button.disabled=true;

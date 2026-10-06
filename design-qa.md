@@ -29,3 +29,15 @@ Required next step: obtain approval to open the synthetic local preview in the c
 ## Task state
 
 Implementation and automated functional validation are complete. Publication is a paired frontend/backend draft change. Remaining acceptance boundary: real-browser visual and responsive verification, followed by release of both repositories in backend-first order.
+
+## Entry screen validation — 2026-10-06
+
+Result: **PASS for the entry-screen change**. This is a separate frontend task and does not replace the constructor-wide acceptance boundary above.
+
+The approved promo direction is cream paper, black outlines and lime accents, with service/master/time notes leading into an example calendar appointment. The existing login remains functional. Registration is represented only by the disabled `регистрация скоро` button, outside the login form. On mobile, the login form follows the introduction before the illustration.
+
+All 85 existing checks passed. An independent executor also passed 19 DOM/HTTP scenarios and 14 real-browser checks in headless Chromium 153, DPR 1, against synthetic API responses. These covered unsuccessful/successful login, restored sessions, empty accounts, workspace/header visibility, constructor preview and schedule save, CSRF, keyboard interaction, native form validation, disabled registration and logout. No application errors or failed resource requests were observed.
+
+Rendered screenshots were inspected at 320, 390, 768, 1440 and 1920 CSS pixels. Document width matched each viewport; note and appointment text fitted horizontally and vertically; mobile introduction/form/example/features ordering was checked through bounding boxes. Initial text overflow at 320 and 768 pixels was corrected and independently rechecked. Final tested `auth.css` SHA-256: `45d055cd2f02b2d01fd8e258a292dc971db4f7c4f3bc23935d68d7d37e5984d2`.
+
+Validation follows the recorded approved visual direction; the original promo image was not available for pixel comparison. Live backend/VK, a production Docker build and Timeweb rollout were not tested for this frontend change.

@@ -3,18 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Салон · диспетчерская</title>
+  <title>Салон · запись через ВК</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/auth.css">
 </head>
 <body>
-  <header class="masthead">
+  <header id="workspace-header" class="masthead" hidden>
     <div><span class="eyebrow">Диспетчерская салона</span><h1>Сегодня без накладок</h1></div>
     <div class="head-tools"><label id="salon-picker" hidden>Салон <select id="salon-select" aria-label="Текущий салон"></select></label><button id="salon-add" hidden>Добавить салон</button><label>Дата <input id="day" type="date"></label><button id="reload">Обновить</button><button id="logout" hidden>Выйти</button></div>
   </header>
   <main>
-    <section id="auth" class="gate">
-      <div><span class="eyebrow">Защищённый вход</span><h2>Войдите в диспетчерскую</h2><p>Сессия хранится в недоступном JavaScript cookie и завершается на сервере по тайм-ауту.</p></div>
-      <form id="auth-form"><label>Логин<input id="username" autocomplete="username" required placeholder="admin"></label><label>Пароль<input id="password" type="password" autocomplete="current-password" required placeholder="Не менее 12 знаков"></label><button>Открыть календарь</button></form>
+    <section id="auth" class="entry" aria-labelledby="entry-title">
+      <header class="entry-header">
+        <div class="entry-brand"><span class="entry-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Салон<span class="entry-brand-detail">Запись через ВК</span></span></div>
+        <span class="entry-audience">Для владельцев и администраторов</span>
+      </header>
+      <div class="entry-layout">
+        <div class="entry-promo">
+          <span class="entry-kicker"><span aria-hidden="true"></span>Ваш салон. Ваши правила.</span>
+          <h1 id="entry-title">У каждой записи<br>своё <span>место.</span></h1>
+          <p class="entry-description">Клиент выбирает услугу, мастера и время в сообщениях ВК. Вы управляете расписанием в одной диспетчерской.</p>
+          <figure class="entry-example" aria-labelledby="entry-example-caption">
+            <div class="entry-notes" aria-hidden="true">
+              <div class="entry-note note-service"><span>01 / Услуга</span><strong>Стрижка</strong><small>60 минут</small></div>
+              <div class="entry-note note-master"><span>02 / Мастер</span><strong>Анна</strong><small>Ваш специалист</small></div>
+              <div class="entry-note note-time"><span>03 / Время</span><strong>15:00</strong><small>Свободный час</small></div>
+            </div>
+            <div class="entry-transfer" aria-hidden="true"><span>Всё сходится</span><img src="/icons/arrow-right.svg" alt=""></div>
+            <div class="entry-calendar" aria-hidden="true">
+              <div class="entry-calendar-head"><strong>Рабочий день</strong><span>Календарь салона</span></div>
+              <div class="entry-calendar-grid">
+                <span class="entry-grid-label"></span><span class="entry-grid-label">Анна</span><span class="entry-grid-label">Ирина</span><span class="entry-grid-label">Мария</span>
+                <span class="entry-grid-time">14:30</span><span class="entry-grid-cell"></span><span class="entry-grid-cell"></span><span class="entry-grid-cell"></span>
+                <span class="entry-grid-time">15:00</span><span class="entry-booking"><b>15:00–16:00</b><strong>Стрижка</strong><small>Анна · 60 мин</small><span class="entry-booking-check">Запись подтверждена <span>✓</span></span></span><span class="entry-grid-cell"></span><span class="entry-grid-cell"></span>
+                <span class="entry-grid-time">15:30</span><span class="entry-grid-cell"></span><span class="entry-grid-cell"></span>
+              </div>
+            </div>
+            <figcaption id="entry-example-caption">Пример: услуга, мастер и время складываются в одну запись календаря.</figcaption>
+          </figure>
+          <ul class="entry-features"><li>Запись в сообщениях ВК</li><li>График мастеров и кабинетов</li><li>Один календарь для команды</li></ul>
+        </div>
+        <aside class="entry-login" aria-labelledby="entry-login-title">
+          <span class="entry-form-label">Личный кабинет</span>
+          <h2 id="entry-login-title">Войти в салон</h2>
+          <p>Здесь управляют расписанием.</p>
+          <form id="auth-form"><label for="username">Логин<input id="username" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="Ваш логин"></label><label for="password">Пароль<input id="password" type="password" autocomplete="current-password" required placeholder="Ваш пароль"></label><button class="entry-submit" type="submit">Открыть календарь<img src="/icons/arrow-right.svg" alt=""></button></form>
+          <div class="entry-registration"><span>Первый раз здесь?</span><button id="registration-soon" type="button" disabled aria-describedby="registration-note">регистрация скоро</button><p id="registration-note">Создание аккаунтов пока недоступно.</p></div>
+        </aside>
+      </div>
+      <footer class="entry-footer"><span>От выбора услуги — до записи в календаре.</span><span>Для вашего салона.</span></footer>
     </section>
 
     <section id="workspace" hidden>
