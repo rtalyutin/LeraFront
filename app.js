@@ -12,6 +12,7 @@ let salonDetails=null, salonDetailsRevision=0, salonManagementRevision=0;
 let salonCreateMode=false, salonCreateBusy=false, salonSaveBusy=false, salonDetailsLoading=false;
 let salonCreateSubmission=null, salonReturnState=null, salonManagementMessage='', salonManagementError=false;
 const salonRequests=new Set();
+const bookingConfirmations=new Set();
 const publicApi=new Set(['/api/login','/api/logout','/api/session','/api/salons']);
 const context=()=>({salonId,revision:salonRevision});
 const isCurrent=scope=>scope.salonId===salonId&&scope.revision===salonRevision;
@@ -68,10 +69,12 @@ function weekly(kind,id,day=currentWeekday()){return data.weekly_schedule.filter
 function selectTab(id) {
   $$('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));
   $$('.tab-panel').forEach(p=>p.hidden=p.id!==id);
+  window.salonConstructor?.selectTab(id);
 }
 function selectBuilder(id) {
   $$('.builder-nav button').forEach(b=>b.classList.toggle('active',b.dataset.build===id));
   $$('.builder-panel').forEach(p=>p.hidden=p.id!==id);
+  window.salonConstructor?.selectBuilder(id);
 }
 function choices(selected=[]) {
   if(!data.services.length)return '<p class="muted">Сначала добавьте услуги.</p>';
@@ -117,6 +120,7 @@ function render() {
   $('#master-cards').innerHTML=resourceCards('master');$('#room-cards').innerHTML=resourceCards('room');
   $('#schedule-zone').textContent=data.timezone;
   $$('.salon-zone').forEach(el=>el.textContent=data.timezone);
+  window.salonConstructor?.render();
   $('#schedule-overview').innerHTML=['master','room'].flatMap(kind=>data[kind+'s'].filter(r=>r.active).map(r=>'<article><strong>'+esc(r.name)+'</strong><p>'+weekdays.map((day,i)=>day+': '+(weekly(kind,r.id,i).map(w=>fmt(w.start_minute)+'–'+fmt(w.end_minute)).join(', ')||'выходной')).join('<br>')+'</p></article>')).join('');
 }
 async function load(){
@@ -289,6 +293,7 @@ function refreshSalonPicker(){
   $('#salon-select').innerHTML=(session?.salons||[]).map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
   if(salonId)$('#salon-select').value=salonId;
   $('#salon-picker').hidden=!session?.salons.length;
+  window.salonConstructor?.refreshSalon();
 }
 function resetSalonManagement(){
   ++salonDetailsRevision;++salonManagementRevision;
@@ -332,6 +337,7 @@ async function loadSalonDetails(scope=context()){
 }
 function startSalonCreation(){
   if(!session||salonCreateMode||salonCreateBusy)return;
+  if(window.salonConstructor?.guardDeparture(startSalonCreation))return;
   const saved=salonId?{salonId,data,metadata,sharedMasters,salonDetails,vkStatus,vkNeedsRefresh:vkNeedsRefresh||!!vkBusy||vkReadBusy,view,tab:$('.tabs button.active')?.dataset.tab||'salon',builder:$('.builder-nav button.active')?.dataset.build||'builder-services'}:null;
   clearSalon();salonId='';salonCreateMode=true;salonReturnState=saved;
   enterWorkspace();$('#workspace-status').hidden=true;selectTab('salon');renderSalonManagement();$('#salon-create-name').focus();
@@ -394,30 +400,19 @@ function updateBlockResources(){
   options($('#block-form [name=resource_id]'),data[kind+'s']);
 }
 function updateScheduleResources(){
-  if(!data)return;const f=$('#schedule-form');
-  options(f.elements.resource_id,data[f.elements.resource_kind.value+'s']);showScheduleHours();
-}
-function addInterval(a='',b='') {
-  const row=document.createElement('div');row.className='interval-row';
-  row.innerHTML='<label>Начало<input class="interval-start" type="time" value="'+a+'" step="60" required></label><label>Конец<input class="interval-end" type="text" inputmode="numeric" placeholder="ЧЧ:ММ" pattern="([01][0-9]|2[0-3]):[0-5][0-9]|24:00" value="'+b+'" required></label><button type="button" class="remove-interval" aria-label="Убрать интервал">Убрать</button>';
-  $('#schedule-intervals').append(row);
-}
-function showScheduleHours() {
-  if(!data)return;const f=$('#schedule-form'),kind=f.elements.resource_kind.value;
-  const rows=weekly(kind,+f.elements.resource_id.value,+f.elements.weekday.value);
-  $('#schedule-intervals').replaceChildren();rows.forEach(r=>addInterval(fmt(r.start_minute),fmt(r.end_minute)));
-  f.elements.closed.checked=!rows.length;
-  f.querySelector('button[type=submit]')?.removeAttribute('disabled');
-  toggleScheduleTimes();
-  f.querySelector('button:not([type])').disabled=!f.elements.resource_id.value;
-}
-function toggleScheduleTimes(){
-  const closed=$('#schedule-form').elements.closed.checked;
-  $('#schedule-intervals').hidden=closed;$('#add-interval').hidden=closed;
-  $$('#schedule-intervals input').forEach(el=>el.disabled=closed);
-  if(!closed&&!$('#schedule-intervals').children.length)addInterval();
+  window.salonConstructor?.renderSchedule();
 }
 function minutes(value){const [h,m]=value.split(':').map(Number);return h*60+m;}
+function confirmAffectedBookings(form,ids){
+  return new Promise(resolve=>{
+    const panel=document.createElement('div');panel.className='booking-confirmation full-width';panel.setAttribute('role','status');
+    const text=document.createElement('p');text.textContent='Изменение отменит действующие записи №'+ids.join(', ')+'. Продолжить?';
+    const confirm=document.createElement('button'),cancel=document.createElement('button');confirm.type=cancel.type='button';confirm.textContent='Применить и отменить записи';cancel.textContent='Сохранить записи';
+    const finish=value=>{bookingConfirmations.delete(finish);panel.remove();resolve(value);};
+    confirm.addEventListener('click',()=>finish(true));cancel.addEventListener('click',()=>finish(false));bookingConfirmations.add(finish);
+    panel.append(text,confirm,cancel);form.append(panel);cancel.focus();
+  });
+}
 async function submitJson(form,path,transform,{canCancelAffected=false,reset=false}={}) {
   if(!data)return;
   const scope=context();
@@ -433,7 +428,8 @@ async function submitJson(form,path,transform,{canCancelAffected=false,reset=fal
       const ids=e.body?.affected_booking_ids;
       if(!canCancelAffected||!ids?.length)throw e;
       if(!isCurrent(scope))throw stale();
-      if(!window.confirm('Изменение отменит действующие записи №'+ids.join(', ')+'. Продолжить?'))return;
+      if(!await confirmAffectedBookings(form,ids))return;
+      if(!isCurrent(scope))throw stale();
       body.acknowledge=true;result=await send();
     }
     if(!isCurrent(scope))throw stale();
@@ -553,6 +549,8 @@ function enterWorkspace(){
   $('#auth').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;$('#salon-picker').hidden=!session?.salons.length;renderSalonManagement();
 }
 function clearSalon(){
+  [...bookingConfirmations].forEach(finish=>finish(false));
+  window.salonConstructor?.reset();
   ++salonRevision;++snapshotRevision;++extrasRevision;
   salonRequests.forEach(c=>c.abort());salonRequests.clear();
   resetVk();
@@ -573,6 +571,7 @@ function clearSalon(){
 }
 async function chooseSalon(id){
   if(!session?.salons.some(s=>String(s.id)===String(id)))return;
+  if(window.salonConstructor?.guardDeparture(()=>chooseSalon(id))){$('#salon-select').value=salonId;return;}
   clearSalon();salonId=String(id);$('#salon-select').value=salonId;
   try{localStorage.setItem('lera.salon.'+session.username,salonId);}catch{}
   enterWorkspace();$('#workspace-status').textContent='Загружаем выбранный салон…';$('#workspace-status').hidden=false;
@@ -603,32 +602,19 @@ $('#auth-form').addEventListener('submit',async e=>{
   catch(err){leaveWorkspace();show(err.body?.error==='authentication_required'?'Неверный логин или пароль':err.message,true);}
   finally{button.disabled=false;}
 });
-$('#logout').addEventListener('click',async()=>{const request=api('/api/logout',{method:'POST',body:'{}'});leaveWorkspace();try{await request;}catch(error){report(error);}});
+async function logout(){if(window.salonConstructor?.guardDeparture(logout))return;const request=api('/api/logout',{method:'POST',body:'{}'});leaveWorkspace();try{await request;}catch(error){report(error);}}
+$('#logout').addEventListener('click',logout);
 $('#salon-select').addEventListener('change',e=>chooseSalon(e.target.value));
 $('#reload').addEventListener('click',()=>{if(csrf&&salonId&&!salonCreateMode){load().catch(report);loadSalonDetails();}});
 $('#day').addEventListener('change',()=>csrf&&load().catch(report));
 $$('.tabs button').forEach(b=>b.addEventListener('click',()=>selectTab(b.dataset.tab)));
-$$('.builder-nav button').forEach(b=>b.addEventListener('click',()=>selectBuilder(b.dataset.build)));
+$$('.builder-nav [data-build]').forEach(b=>b.addEventListener('click',()=>selectBuilder(b.dataset.build)));
 $('#setup-summary').addEventListener('click',e=>{if(e.target.closest('[data-open-constructor]'))selectTab('constructor');});
 $$('[data-view]').forEach(b=>b.addEventListener('click',()=>{if(!data)return;view=b.dataset.view;$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));renderCalendar();}));
 $('#booking-form [name=service_id]').addEventListener('change',updateBookingMasters);
 $('#block-form [name=resource_kind]').addEventListener('change',updateBlockResources);
-$('#schedule-form [name=resource_kind]').addEventListener('change',updateScheduleResources);
-$('#schedule-form [name=resource_id]').addEventListener('change',showScheduleHours);
-$('#schedule-form [name=weekday]').addEventListener('change',showScheduleHours);
-$('#schedule-form [name=closed]').addEventListener('change',toggleScheduleTimes);
-$('#add-interval').addEventListener('click',()=>addInterval());
-$('#schedule-intervals').addEventListener('click',e=>{if(e.target.closest('.remove-interval'))e.target.closest('.interval-row').remove();});
 $('#booking-form').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/bookings',b=>({...b,service_id:+b.service_id,master_id:+b.master_id,start:salonTime(b.start),action_key:crypto.randomUUID()}),{reset:true});});
 $('#block-form').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/blocks',b=>({...b,resource_id:+b.resource_id,start:salonTime(b.start),end:salonTime(b.end)}),{canCancelAffected:true,reset:true});});
-$('#schedule-form').addEventListener('submit',e=>{
-  e.preventDefault();const f=e.target;
-  submitJson(f,'/api/weekly-schedule',b=>{
-    const intervals=f.elements.closed.checked?[]:$$('.interval-row',f).map(row=>({start_minute:minutes($('.interval-start',row).value),end_minute:minutes($('.interval-end',row).value)}));
-    if(!f.elements.closed.checked&&!intervals.length)throw new Error('Добавьте рабочий интервал или выберите выходной.');
-    return {resource_kind:b.resource_kind,resource_id:+b.resource_id,weekday:+b.weekday,intervals};
-  },{canCancelAffected:true});
-});
 $('#service-create').addEventListener('submit',e=>{e.preventDefault();submitJson(e.target,'/api/services',b=>({name:b.name,duration_minutes:+b.duration_minutes}),{reset:true});});
 $('#service-list').addEventListener('submit',e=>{e.preventDefault();const f=e.target;submitJson(f,'/api/services/'+f.dataset.id,b=>({name:b.name,duration_minutes:+b.duration_minutes,active:f.elements.active.checked}),{canCancelAffected:true});});
 $$('.resource-create').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();submitJson(f,'/api/'+f.dataset.kind+'s',resourceBody(f),{reset:true});}));
@@ -668,4 +654,4 @@ $('#salon-details-form').addEventListener('submit',e=>{e.preventDefault();saveSa
 $('#salon-open-constructor').addEventListener('click',()=>{if(data&&!salonCreateMode){selectTab('constructor');selectBuilder('builder-services');}});
 $('#salon-open-vk').addEventListener('click',()=>{if(data&&!salonCreateMode)selectTab('vk');});
 $('#lanes').addEventListener('click',async e=>{const id=e.target.dataset.cancel;if(!id||e.target.disabled)return;const scope=context();e.target.disabled=true;try{await api('/api/bookings/'+id+'/cancel',{scope,method:'POST',body:JSON.stringify({action_key:crypto.randomUUID()})});if(!isCurrent(scope))return;show('Запись №'+id+' отменена');await load();}catch(err){if(isCurrent(scope)){e.target.disabled=false;report(err);}}});
-api('/api/session').then(acceptSession).catch(leaveWorkspace);
+window.addEventListener('DOMContentLoaded',()=>api('/api/session').then(acceptSession).catch(leaveWorkspace),{once:true});

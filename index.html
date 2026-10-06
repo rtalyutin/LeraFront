@@ -32,6 +32,22 @@
         <button data-tab="constructor">Конструктор салона</button>
         <button data-tab="vk">ВК-бот</button>
       </nav>
+      <section id="setup-shell" hidden>
+        <header class="setup-header"><div class="setup-brand"><select id="setup-salon-name" aria-label="Выбранный салон"></select><span>Настройка салона</span></div><button id="setup-exit" type="button" class="text-button"><img src="/icons/arrow-left.svg" alt="">Вернуться к календарю</button></header>
+        <div id="setup-departure" class="departure-warning" role="status" hidden><p id="setup-departure-text"></p><button id="setup-stay" type="button">Остаться и сохранить</button><button id="setup-discard-leave" type="button" class="text-button">Отменить черновики и продолжить</button></div>
+        <div class="setup-layout">
+          <nav class="setup-nav builder-nav" aria-label="Настройка салона">
+            <button data-setup-tab="salon"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>Салон</b><small>Основная информация</small></span></button>
+            <button data-build="builder-services"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>Услуги</b><small>Список услуг</small></span></button>
+            <button data-build="builder-masters"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>Мастера</b><small>Сотрудники салона</small></span></button>
+            <button data-build="builder-rooms"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>Кабинеты</b><small>Помещения и оборудование</small></span></button>
+            <button data-build="builder-schedule"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>График работы</b><small>Рабочие дни и время</small></span></button>
+            <button data-setup-tab="vk"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>ВК-бот</b><small>Онлайн-запись</small></span></button>
+            <button data-build="builder-data" class="extra-step"><img src="/icons/journal-text.svg" alt=""><span><b>Дополнительные поля</b><small>Справочники и настройки</small></span></button>
+          </nav>
+          <div id="setup-body" class="setup-body"></div>
+        </div>
+      </section>
       <section id="salon" class="tab-panel" hidden>
         <div class="builder-head"><span class="eyebrow">Сначала ваш салон</span><h2>Здесь начинается работа</h2><p>Создайте салон, настройте услуги и рабочие часы, затем подключите ВК-бота.</p></div>
         <p id="salon-management-message" class="muted" role="status" aria-live="polite" hidden></p>
@@ -51,14 +67,7 @@
         <form id="block-form" class="editor"><h2>Закрыть ресурс</h2><p class="full-width muted">Часовой пояс салона: <b class="salon-zone"></b></p><label>Тип<select name="resource_kind"><option value="master">Мастер</option><option value="room">Кабинет</option></select></label><label>Ресурс<select name="resource_id" required></select></label><label>С<input name="start" type="datetime-local" required></label><label>До<input name="end" type="datetime-local" required></label><label>Причина<input name="reason" placeholder="Обучение / ремонт"></label><button>Проверить и закрыть</button></form>
       </section>
       <section id="constructor" class="tab-panel" hidden>
-        <div class="builder-head"><span class="eyebrow">Соберите свой салон</span><h2>Вы задаёте, кто, где и когда принимает</h2><p>Создайте услуги, назначьте их мастерам и кабинетам, затем задайте рабочие часы. Доступное время записи рассчитывается по этим настройкам.</p></div>
-        <nav class="builder-nav" aria-label="Части конструктора">
-          <button class="active" data-build="builder-services">1 · Услуги</button>
-          <button data-build="builder-masters">2 · Мастера</button>
-          <button data-build="builder-rooms">3 · Кабинеты</button>
-          <button data-build="builder-schedule">4 · Рабочие часы</button>
-          <button data-build="builder-data">5 · Свои справочники и поля</button>
-        </nav>
+        <div id="constructor-intro" class="builder-head"><span class="eyebrow">Соберите свой салон</span><h2>Вы задаёте, кто, где и когда принимает</h2><p>Создайте услуги, назначьте их мастерам и кабинетам, затем задайте рабочие часы. Доступное время записи рассчитывается по этим настройкам.</p></div>
         <section id="builder-services" class="builder-panel">
           <form id="service-create" class="editor"><h2>Добавить услугу</h2><label>Название<input name="name" maxlength="160" required></label><label>Длительность, минут<input name="duration_minutes" type="number" min="1" max="1440" step="1" required></label><button>Добавить услугу</button></form>
           <div id="service-list" class="service-list"></div>
@@ -73,17 +82,34 @@
           <div id="room-cards" class="resource-list"></div>
         </section>
         <section id="builder-schedule" class="builder-panel" hidden>
-        <form id="schedule-form" class="editor"><h2>Рабочие часы</h2>
-          <label>Тип<select name="resource_kind"><option value="master">Мастер</option><option value="room">Кабинет</option></select></label>
-          <label>Ресурс<select name="resource_id" required></select></label>
-          <label>День недели<select name="weekday"><option value="0">Понедельник</option><option value="1">Вторник</option><option value="2">Среда</option><option value="3">Четверг</option><option value="4">Пятница</option><option value="5">Суббота</option><option value="6">Воскресенье</option></select></label>
-          <label class="choice"><input name="closed" type="checkbox"> Выходной</label>
-          <div id="schedule-intervals" class="schedule-intervals"></div>
-          <button type="button" id="add-interval">Добавить рабочий интервал</button>
-          <p class="muted full-width">Время указано в часовом поясе салона: <b id="schedule-zone"></b>. Для перерыва оставьте промежуток между интервалами. 24:00 означает конец дня. Начало записи — каждые 30 минут.</p>
-          <button>Применить к будущим датам</button>
-        </form>
-        <div id="schedule-overview" class="schedule-overview"></div>
+          <div class="schedule-layout">
+            <div class="schedule-editor">
+              <div class="schedule-heading"><h2>Когда можно записаться?</h2><p>Задайте рабочие дни и проверьте доступное время</p></div>
+              <form id="schedule-form" novalidate>
+                <div class="resource-tabs" role="group" aria-label="Чей график настроить"><button type="button" data-schedule-kind="master" aria-pressed="true">Мастера</button><button type="button" data-schedule-kind="room" aria-pressed="false">Кабинеты</button></div>
+                <select name="resource_kind" hidden aria-label="Тип ресурса"><option value="master">Мастер</option><option value="room">Кабинет</option></select>
+                <label class="schedule-resource"><span id="schedule-resource-label">Мастер</span><select name="resource_id" required aria-label="Ресурс графика"></select></label>
+                <div id="schedule-empty" class="empty" hidden></div>
+                <div id="schedule-fields">
+                  <div class="workday-heading"><h3>Рабочие дни</h3><span id="schedule-draft-badge" hidden>Есть изменения</span></div>
+                  <div id="workday-buttons" class="workday-buttons" role="group" aria-label="Рабочие дни недели"></div>
+                  <div id="schedule-common"><h3 id="schedule-day-title">Понедельник — пятница</h3><div id="schedule-intervals" class="schedule-intervals"></div><button type="button" id="add-interval" class="outline-button"><img src="/icons/plus-circle.svg" alt="">Добавить интервал</button></div>
+                  <div id="schedule-individual" hidden></div>
+                  <button type="button" id="schedule-mode" class="link-button" aria-expanded="false">Разный график по дням<img src="/icons/chevron-down.svg" alt=""></button>
+                  <div id="schedule-breaks" class="info-note" hidden><img src="/icons/info-circle.svg" alt=""><div><b id="schedule-break-title"></b><span>В это время запись недоступна.</span></div></div>
+                  <div id="schedule-message" class="inline-message" role="status" aria-live="polite" hidden></div>
+                  <div class="schedule-actions"><button type="button" id="schedule-discard" class="link-button" hidden>Отменить изменения графика</button></div>
+                  <footer class="schedule-footer"><img src="/icons/clock.svg" alt=""><div>Часовой пояс салона: <b id="schedule-zone"></b><p>Изменения применяются к будущим датам. Существующие записи сохранятся.</p></div></footer>
+                </div>
+              </form>
+            </div>
+            <aside class="booking-preview" aria-label="Предпросмотр записи клиента">
+              <h2>Так увидит клиент</h2><p class="preview-subtitle">Предпросмотр · без создания записи</p>
+              <div class="preview-card"><label class="preview-control">Услуга<select id="preview-service"></select></label><label class="preview-control">Мастер<select id="preview-master"></select></label><div class="preview-dates"><h3>Выберите дату</h3><div id="preview-days" class="preview-days"></div><label class="preview-date-picker">Другая дата<input id="preview-date" type="date"></label><p id="preview-date-label" class="muted"></p></div><h3>Доступное время</h3><div id="preview-times" class="preview-times" aria-live="polite"></div><p id="preview-result" class="info-note" role="status"></p><button type="button" id="preview-retry" class="link-button" hidden>Повторить проверку</button><button type="button" id="preview-room" class="link-button">Настроить график кабинета<img src="/icons/arrow-right.svg" alt=""></button></div>
+              <button type="submit" form="schedule-form" id="schedule-save-next" class="primary-button">Сохранить и перейти к ВК<img src="/icons/arrow-right.svg" alt=""></button>
+            </aside>
+          </div>
+          <details class="schedule-overview-details"><summary>Все сохранённые графики</summary><div id="schedule-overview" class="schedule-overview"></div></details>
         </section>
         <section id="builder-data" class="builder-panel" hidden>
           <div class="builder-head"><h2>Ваши справочники и дополнительные поля</h2><p>Добавляйте нужные салону сведения: например, материалы и их остатки или предпочтения клиентов. Основные услуги, мастера и кабинеты создаются в соседних разделах; здесь можно заполнить их дополнительные поля.</p></div>
@@ -128,5 +154,6 @@
     <aside id="toast" class="toast" role="status" aria-live="polite" hidden></aside>
   </main>
   <script src="/app.js" defer></script>
+  <script src="/constructor.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+{
+  "name": "lera-front",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "test": "node test_frontend_contract.cjs && node test_salon_frontend.cjs && node test_vk_frontend.cjs",
+    "test:constructor": "node test_constructor_dom.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.2"
+  }
+}

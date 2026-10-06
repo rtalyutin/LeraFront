@@ -1,0 +1,71 @@
+{
+  "engine": "JSDOM 30.1.2",
+  "tests": [
+    {
+      "name": "read-only saved availability renders real slots",
+      "result": "PASS"
+    },
+    {
+      "name": "common editor updates all seven working days and calculates break",
+      "result": "PASS"
+    },
+    {
+      "name": "switching individual and common preserves common hours",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed individual hours do not silently flatten",
+      "result": "PASS"
+    },
+    {
+      "name": "closing all days and re-opening one creates actual work hours",
+      "result": "PASS"
+    },
+    {
+      "name": "master and room drafts combine and survive navigation",
+      "result": "PASS"
+    },
+    {
+      "name": "changed date wins over older late preview",
+      "result": "PASS"
+    },
+    {
+      "name": "save one of two drafts remains in schedule and re-enables controls",
+      "result": "PASS"
+    },
+    {
+      "name": "saving last draft enters VK and schedule re-entry is editable",
+      "result": "PASS"
+    },
+    {
+      "name": "invalid draft prevents request and preserves previous saved state",
+      "result": "PASS"
+    },
+    {
+      "name": "service and resource create/edit controls remain available with name mappings",
+      "result": "PASS"
+    },
+    {
+      "name": "unsaved schedule blocks new salon and logout until explicit discard",
+      "result": "PASS"
+    },
+    {
+      "name": "salon create and rename work and incomplete schedule has explicit empty state",
+      "result": "PASS"
+    },
+    {
+      "name": "UI creates service, master, room mappings and edits their names",
+      "result": "PASS"
+    },
+    {
+      "name": "room helper switches to correct room when resource IDs differ",
+      "result": "PASS"
+    },
+    {
+      "name": "header salon selection waits for explicit discard and switches to requested salon",
+      "result": "PASS"
+    }
+  ],
+  "uncaught": [],
+  "note": "HTTP request bodies/headers omitted; scenario results and uncaught errors retained. All credentials in raw execution log are disposable synthetic fixture values."
+}

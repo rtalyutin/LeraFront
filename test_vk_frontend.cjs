@@ -24,7 +24,7 @@ const sandbox={document:{querySelector:node,querySelectorAll:s=>groups.get(s)||[
   fetch(path,options){requests.push({path,options});return fetchImpl(path,options);}
 };
 const source=fs.readFileSync(__dirname+'/app.js','utf8');
-vm.createContext(sandbox);vm.runInContext(source.replace("api('/api/session').then(acceptSession).catch(leaveWorkspace);",''),sandbox);
+vm.createContext(sandbox);vm.runInContext(source.replace("window.addEventListener('DOMContentLoaded',()=>api('/api/session').then(acceptSession).catch(leaveWorkspace),{once:true});",''),sandbox);
 const run=source=>vm.runInContext(source,sandbox);
 const response=(body,ok=true)=>({ok,json:async()=>body});
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
