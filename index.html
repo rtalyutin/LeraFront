@@ -81,6 +81,7 @@
             <button data-build="builder-schedule"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>График работы</b><small>Рабочие дни и время</small></span></button>
             <button data-setup-tab="vk"><img class="step-icon" src="/icons/circle.svg" alt=""><span><b>ВК-бот</b><small>Онлайн-запись</small></span></button>
             <button data-build="builder-data" class="extra-step"><img src="/icons/journal-text.svg" alt=""><span><b>Дополнительные поля</b><small>Справочники и настройки</small></span></button>
+            <button id="solo-expand" type="button" class="extra-step" hidden><img src="/icons/plus-circle.svg" alt=""><span><b>Добавить мастера или кабинет</b><small>Открыть полный конструктор</small></span></button>
           </nav>
           <div id="setup-body" class="setup-body"></div>
         </div>
@@ -88,8 +89,22 @@
       <section id="salon" class="tab-panel" hidden>
         <div class="builder-head"><span class="eyebrow">Сначала ваш салон</span><h2>Здесь начинается работа</h2><p>Создайте салон, настройте услуги и рабочие часы, затем подключите ВК-бота.</p></div>
         <p id="salon-management-message" class="muted" role="status" aria-live="polite" hidden></p>
-        <form id="salon-create-form" class="editor" hidden><h2>Создать салон</h2><p class="muted full-width">Вы станете администратором этого салона и сможете изменить его название позже.</p><label class="full-width">Название салона<input id="salon-create-name" name="name" type="text" maxlength="200" required placeholder="Например, Лера"></label><button id="salon-create-submit">Создать салон</button><button id="salon-create-cancel" type="button" hidden>Отмена</button></form>
+        <form id="salon-create-form" class="editor" hidden><h2>Создать салон</h2><p class="muted full-width">Вы станете администратором этого салона и сможете изменить его название позже.</p><label class="full-width">Название салона<input id="salon-create-name" name="name" type="text" maxlength="200" required placeholder="Например, Лера"></label>
+          <fieldset class="solo-choice full-width"><legend>Как вы работаете?</legend><label><input type="radio" name="setup_mode" value="solo" required><span><b>Работаю один</b><small>Один мастер и один кабинет. Услуги и общий график.</small></span></label><label><input type="radio" name="setup_mode" value="team" required><span><b>У меня команда</b><small>Отдельные мастера, кабинеты и графики.</small></span></label></fieldset>
+          <label id="salon-create-master-label" class="full-width" hidden>Ваше имя<input id="salon-create-master" name="master_name" type="text" maxlength="160" placeholder="Например, Анна"></label>
+          <button id="salon-create-submit">Создать салон</button><button id="salon-create-cancel" type="button" hidden>Отмена</button></form>
         <form id="salon-details-form" class="editor" hidden><h2>Ваш салон</h2><label class="full-width">Название салона<input id="salon-edit-name" name="name" type="text" maxlength="200" required></label><button id="salon-save">Сохранить название</button></form>
+        <section id="solo-settings" class="solo-settings" hidden>
+          <div class="solo-heading"><div><span class="eyebrow">Настройка под вашу работу</span><h2>Один мастер. Один график.</h2><p id="solo-description">Выберите режим для одного мастера и кабинета — услуги назначатся автоматически.</p></div><span id="solo-mode-badge" class="solo-badge"></span></div>
+          <div class="solo-mode-actions" role="group" aria-label="Режим конструктора"><button id="solo-choose" type="button">Работаю один</button><button id="solo-team" type="button">У меня команда</button></div>
+          <p id="solo-ineligible" class="muted" hidden>У салона несколько действующих мастеров или кабинетов. Для них используется полный конструктор.</p>
+          <form id="solo-form" class="editor" hidden><h3 class="full-width">Кто принимает клиентов?</h3><label class="full-width">Ваше имя<input id="solo-master-name" name="master_name" maxlength="160" required></label>
+            <div id="solo-reconcile" class="solo-reconcile full-width" hidden><h3>Согласуйте существующие настройки</h3><p>Общий режим объединит назначения услуг и график. Сначала выберите, какие настройки применить.</p><div id="solo-service-differences"></div><label id="solo-service-ack-label" class="choice" hidden><input id="solo-service-ack" type="checkbox">Назначить все действующие услуги мастеру и кабинету</label><fieldset id="solo-hours-source" hidden><legend>Какой график использовать для обоих?</legend><label class="choice"><input type="radio" name="hours_source" value="master">График мастера</label><p id="solo-master-hours" class="muted"></p><label class="choice"><input type="radio" name="hours_source" value="room">График кабинета</label><p id="solo-room-hours" class="muted"></p></fieldset></div>
+            <button id="solo-save">Включить простой режим</button></form>
+          <p id="solo-message" class="inline-message" role="status" aria-live="polite" hidden></p>
+          <button id="solo-retry" type="button" class="link-button" hidden>Повторить настройку</button>
+          <button id="solo-next-services" type="button" class="primary-button" hidden>Дальше: услуги →</button>
+        </section>
         <div id="salon-next-steps" class="builder-head" hidden><h2>Дальше настройте работу</h2><p>Добавьте услуги, мастеров, кабинеты и рабочие часы. Затем подключите сообщество ВК, чтобы принимать записи в сообщениях.</p><div class="vk-actions"><button id="salon-open-constructor" type="button">Настроить услуги и часы</button><button id="salon-open-vk" type="button">Подключить ВК-бота</button></div></div>
       </section>
       <section id="calendar" class="tab-panel">
@@ -111,7 +126,9 @@
         <div id="constructor-intro" class="builder-head"><span class="eyebrow">Соберите свой салон</span><h2>Вы задаёте, кто, где и когда принимает</h2><p>Создайте услуги, назначьте их мастерам и кабинетам, затем задайте рабочие часы. Доступное время записи рассчитывается по этим настройкам.</p></div>
         <section id="builder-services" class="builder-panel">
           <form id="service-create" class="editor"><h2>Добавить услугу</h2><label>Название<input name="name" maxlength="160" required></label><label>Длительность, минут<input name="duration_minutes" type="number" min="1" max="1440" step="1" required></label><button>Добавить услугу</button></form>
+          <p id="solo-service-note" class="muted" hidden>Каждая услуга автоматически доступна вам в единственном кабинете.</p>
           <div id="service-list" class="service-list"></div>
+          <button id="solo-next-hours" type="button" class="primary-button" hidden>Дальше: когда принимаю →</button>
         </section>
         <section id="builder-masters" class="builder-panel" hidden>
           <form id="master-create" class="editor resource-create" data-kind="master"><h2>Добавить мастера</h2><label>Имя<input name="name" maxlength="160" required></label><fieldset class="service-choices"><legend>Какие услуги оказывает</legend><div data-service-choices></div></fieldset><button>Добавить мастера</button></form>
@@ -126,6 +143,7 @@
           <div class="schedule-layout">
             <div class="schedule-editor">
               <div class="schedule-heading"><h2>Когда можно записаться?</h2><p>Задайте рабочие дни и проверьте доступное время</p></div>
+              <p id="solo-exceptions" class="info-note" hidden></p>
               <form id="schedule-form" novalidate>
                 <div class="resource-tabs" role="group" aria-label="Чей график настроить"><button type="button" data-schedule-kind="master" aria-pressed="true">Мастера</button><button type="button" data-schedule-kind="room" aria-pressed="false">Кабинеты</button></div>
                 <select name="resource_kind" hidden aria-label="Тип ресурса"><option value="master">Мастер</option><option value="room">Кабинет</option></select>
@@ -196,5 +214,6 @@
   </main>
   <script src="/app.js" defer></script>
   <script src="/constructor.js" defer></script>
+  <script src="/solo.js" defer></script>
 </body>
 </html>

@@ -96,6 +96,7 @@ function resourceCards(kind) {
   }).join('')||'<p class="muted">Пока нет '+(kind==='master'?'мастеров':'кабинетов')+'. Добавьте первый.</p>';
 }
 function renderCalendar() {
+  if(window.soloSetup?.isSolo()){view='masters';calendarResource='';}
   const dates=calendarWeek?.dates||weekDates($('#day').value);
   $('#week-title').textContent=calendarDateLabel(dates[0])+' — '+calendarDateLabel(dates[6],{day:'numeric',month:'long',year:'numeric'});
   const status=$('#calendar-week-status');
@@ -171,6 +172,7 @@ function render() {
   $$('.salon-zone').forEach(el=>el.textContent=data.timezone);
   window.salonConstructor?.render();
   $('#schedule-overview').innerHTML=['master','room'].flatMap(kind=>data[kind+'s'].filter(r=>r.active).map(r=>'<article><strong>'+esc(r.name)+'</strong><p>'+weekdays.map((day,i)=>day+': '+(weekly(kind,r.id,i).map(w=>fmt(w.start_minute)+'–'+fmt(w.end_minute)).join(', ')||'выходной')).join('<br>')+'</p></article>')).join('');
+  window.soloSetup?.render();
 }
 async function load(){
   const scope=context(),revision=++snapshotRevision;
@@ -378,6 +380,7 @@ function renderSalonManagement(){
   $('#salon-create-submit').disabled=!salonCreateMode||salonCreateBusy;
   $('#salon-create-submit').textContent=salonCreateBusy?'Создаём…':salonCreateSubmission?'Повторить создание':'Создать салон';
   $('#salon-create-name').disabled=salonCreateBusy||!!salonCreateSubmission;
+  $$('#salon-create-form [name=setup_mode],#salon-create-master').forEach(el=>el.disabled=salonCreateBusy||!!salonCreateSubmission);
   $('#salon-create-cancel').hidden=!salonCreateMode||!salonReturnState;$('#salon-create-cancel').disabled=salonCreateBusy||!!salonCreateSubmission;
   $('#salon-save').disabled=!salonDetails||salonSaveBusy||salonDetailsLoading||salonCreateMode;
   $('#salon-edit-name').disabled=$('#salon-save').disabled;
@@ -389,6 +392,7 @@ function renderSalonManagement(){
   $('#salon-management-message').className=salonManagementError?'vk-notice':'muted';
   $('#workspace .status-strip').hidden=salonCreateMode||!data;
   $$('.tabs button').forEach(b=>b.disabled=!session||(b.dataset.tab!=='salon'&&(salonCreateMode||!data)));
+  window.soloSetup?.render();
 }
 function validSalonDetails(value,scope){
   if(!value||String(value.id)!==scope.salonId||typeof value.name!=='string')throw new Error('Некорректные сведения о салоне.');
@@ -429,16 +433,28 @@ async function createSalon(){
   if(!session||!salonCreateMode||salonCreateBusy)return;
   const name=$('#salon-create-name').value.trim();
   if(!salonCreateSubmission&&(!name||name.length>200)){salonManagementMessage='Укажите название салона длиной до 200 символов.';salonManagementError=true;renderSalonManagement();return;}
-  if(!salonCreateSubmission)salonCreateSubmission={name,action_key:crypto.randomUUID()};
+  if(!salonCreateSubmission){
+    let setup;try{setup=window.soloSetup?.creationChoice();}catch(error){salonManagementMessage=error.message;salonManagementError=true;renderSalonManagement();return;}
+    salonCreateSubmission={name,action_key:crypto.randomUUID(),...(setup?{setup}:{})};
+  }
+  const setup=salonCreateSubmission.setup;
   const revision=salonManagementRevision,username=session.username;
   salonCreateBusy=true;salonManagementMessage='';salonManagementError=false;renderSalonManagement();
   try{
-    const result=await api('/api/salons',{method:'POST',body:JSON.stringify(salonCreateSubmission)});
+    const {name:submittedName,action_key}=salonCreateSubmission;
+    const result=await api('/api/salons',{method:'POST',body:JSON.stringify({name:submittedName,action_key})});
     if(!session||session.username!==username||revision!==salonManagementRevision||!salonCreateMode)return;
     if(!Array.isArray(result.salons)||!result.salons.some(s=>String(s.id)===String(result.id))||typeof result.name!=='string')throw new Error('Неполный ответ о создании салона.');
     session.salons=result.salons;refreshSalonPicker();salonCreateBusy=false;
     await chooseSalon(result.id);
-    if(session?.username===username&&String(result.id)===salonId){selectTab('salon');salonManagementMessage='Салон создан. Теперь настройте услуги и рабочие часы, затем подключите ВК-бота.';renderSalonManagement();}
+    if(session?.username===username&&String(result.id)===salonId){
+      const initialized=setup?.mode==='solo'?await window.soloSetup?.initialize(setup):true;
+      if(session?.username!==username||String(result.id)!==salonId)return;
+      selectTab(initialized&&setup?.mode==='solo'?'constructor':'salon');
+      if(initialized&&setup?.mode==='solo')selectBuilder('builder-services');
+      salonManagementMessage=initialized?'Салон создан. Настройте услуги и рабочие часы, затем подключите ВК-бота.':'Салон создан. Завершите настройку простого режима ниже — повторно создавать салон не нужно.';
+      renderSalonManagement();
+    }
   }catch(error){
     if(!session||session.username!==username||revision!==salonManagementRevision||!salonCreateMode||error.name==='AbortError')return;
     if(['invalid_request','forbidden','authentication_required','csrf_failed'].includes(error.body?.error)){
@@ -465,6 +481,8 @@ function updateBookingMasters(){
   const serviceId=+$('#booking-form [name=service_id]').value;
   options($('#booking-form [name=master_id]'),data.masters.filter(m=>(m.service_ids||[]).includes(serviceId)));
   $('#booking-form button').disabled=!$('#booking-form [name=master_id]').value;
+  const masterSelect=$('#booking-form [name=master_id]');
+  const masterLabel=masterSelect.closest?.('label');if(masterLabel)masterLabel.hidden=!!window.soloSetup?.isSolo()&&masterSelect.options.length===1;
 }
 function updateBlockResources(){
   if(!data)return;const kind=$('#block-form [name=resource_kind]').value;
@@ -600,7 +618,7 @@ async function loadExtras(scope){
   if(!isCurrent(scope)||revision!==extrasRevision)return;
   const [catalog,masters]=results;
   if(catalog.status==='fulfilled'){
-    metadata=catalog.value;renderMetadata();
+    metadata={...catalog.value,types:catalog.value.types.map(t=>({...t,parameters:t.parameters.filter(p=>t.code!=='salon_settings'||p.code!=='constructor_mode')}))};renderMetadata();
   }else if(catalog.reason.name!=='AbortError'){$('#metadata-status').textContent=catalog.reason.message;$('#metadata-content').hidden=true;$('#metadata-type-create button').disabled=true;}
   if(masters.status==='fulfilled'){
     sharedMasters=masters.value.masters||[];
@@ -623,6 +641,7 @@ function enterWorkspace(){
 function clearSalon(){
   [...bookingConfirmations].forEach(finish=>finish(false));
   window.salonConstructor?.reset();
+  window.soloSetup?.reset();
   ++salonRevision;++snapshotRevision;++extrasRevision;
   salonRequests.forEach(c=>c.abort());salonRequests.clear();
   resetVk();

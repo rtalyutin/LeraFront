@@ -1,6 +1,25 @@
 :root { --ink:#1e1b1d; --paper:#f4efe8; --card:#fffaf3; --line:#d7cec3; --acid:#d7ff45; --hot:#d84b35; --muted:#756d68; }
 * { box-sizing:border-box; }
 [hidden] { display:none !important; }
+.solo-settings { margin-top:24px; padding:24px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+.solo-heading { display:flex; justify-content:space-between; align-items:start; gap:16px; }
+.solo-heading h2 { font-size:28px; line-height:1.2; }
+.solo-heading p { max-width:64ch; margin:10px 0 0; color:var(--muted); }
+.solo-badge { flex-shrink:0; padding:6px 10px; background:var(--acid); border-radius:5px; font-size:12px; font-weight:700; }
+.solo-mode-actions { display:flex; flex-wrap:wrap; gap:12px; margin:20px 0; }
+.solo-mode-actions button { box-shadow:none; border-radius:6px; }
+.solo-choice { display:grid; grid-template-columns:1fr 1fr; gap:12px; border:0; padding:0; }
+.solo-choice legend { font-weight:700; margin-bottom:8px; }
+.solo-choice label { display:flex; align-items:start; gap:10px; padding:16px; border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+.solo-choice label:has(input:checked) { border-color:var(--ink); background:var(--acid); }
+.solo-choice input { margin-top:5px; }
+.solo-choice b,.solo-choice small { display:block; }
+.solo-choice small { margin-top:5px; font-weight:400; }
+.solo-reconcile { padding:18px; border:1px solid var(--line); background:var(--paper); border-radius:8px; }
+.solo-reconcile fieldset { margin-top:16px; border:0; padding:0; }
+.solo-reconcile .muted { line-height:1.7; overflow-wrap:anywhere; }
+#solo-next-services,#solo-next-hours { margin-top:20px; }
+@media(max-width:650px) { .solo-settings { padding:18px; } .solo-heading { flex-direction:column; } .solo-choice { grid-template-columns:1fr; } }
 body { margin:0; color:var(--ink); background:var(--paper); font:15px/1.45 system-ui,sans-serif; }
 button,input,select { font:inherit; }
 button { border:1px solid var(--ink); background:var(--card); padding:.7rem 1rem; cursor:pointer; box-shadow:3px 3px 0 var(--ink); }

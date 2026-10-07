@@ -11,6 +11,12 @@
   const signature=week=>JSON.stringify(week);
   const dirty=d=>signature(d.week)!==d.baseline;
   const dirtyDrafts=()=>[...drafts.values()].filter(dirty);
+  const solo=()=>window.soloSetup?.isSolo()===true;
+  function syncSoloDraft(){
+    if(!solo())return;
+    const master=initDraft('master',data.solo_setup.master_id),room=initDraft('room',data.solo_setup.room_id);
+    room.week=clone(master.week);
+  }
   const timeMinute=(value,end=false)=>{
     if(!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)&&!(end&&value==='24:00'))throw new Error('Укажите время в формате ЧЧ:ММ. Конец дня можно задать как 24:00.');
     return minutes(value);
@@ -28,11 +34,12 @@
     const ready={salon:!!salonId,'builder-services':data?.services.some(x=>x.active),'builder-masters':data?.masters.some(x=>x.active),'builder-rooms':data?.rooms.some(x=>x.active),'builder-schedule':!!data&&['master','room'].every(kind=>{const resources=data[kind+'s'].filter(x=>x.active);return resources.length&&resources.every(r=>data.weekly_schedule.some(w=>w[kind+'_id']===r.id));}),vk:vkStatus?.status==='connected'};
     $$('.setup-nav button').forEach(b=>{
       const id=b.dataset.build||b.dataset.setupTab,current=b.dataset.build?activeTab==='constructor'&&activeBuilder===id:activeTab===id;
-      b.disabled=saving||!session||(id!=='salon'&&(!data||salonCreateMode));
+      b.disabled=saving||window.soloSetup?.busy()||!session||(id!=='salon'&&(!data||salonCreateMode));
       b.classList.toggle('active',current);b.toggleAttribute('aria-current',current);
       if(current)b.setAttribute('aria-current','step');
       const img=$('.step-icon',b);if(img){img.src='/icons/'+(ready[id]&&!current?'check-circle-fill':'circle')+'.svg';img.classList.toggle('complete',!!ready[id]&&!current);}
     });
+    window.soloSetup?.decorateNavigation();
   }
   function selectSetupTab(id){
     activeTab=id;shell.hidden=!['salon','constructor','vk'].includes(id);
@@ -59,6 +66,7 @@
   function isMixed(d){return new Set(d.week.filter(rows=>rows.length).map(signature)).size>1;}
   function renderSchedule(){
     if(!data)return;
+    if(solo()){form.elements.resource_kind.value='master';form.elements.resource_id.value=String(data.solo_setup.master_id);}
     const kind=form.elements.resource_kind.value;
     options(form.elements.resource_id,data[kind+'s']);
     $('#schedule-resource-label').textContent=kind==='master'?'Мастер':'Кабинет';
@@ -69,6 +77,7 @@
     if(!id){selectedKey='';$('#schedule-save-next').disabled=true;return;}
     const changed=selectedKey!==key;selectedKey=key;const d=initDraft(kind,id);
     if(changed)individual=isMixed(d);
+    syncSoloDraft();
     if(changed||!$('#schedule-intervals').children.length)renderEditor();
     renderBadges();renderNav();
   }
@@ -91,8 +100,9 @@
     renderBadges();renderBreaks();
   }
   function renderBadges(){
+    syncSoloDraft();
     const d=getDraft(),isDirty=d&&dirty(d);$('#schedule-draft-badge').hidden=!isDirty;$('#schedule-discard').hidden=!isDirty;
-    const save=$('#schedule-save-next');save.disabled=saving||!d;save.innerHTML=(saving?'Сохраняем…':dirtyDrafts().length>1?'Сохранить этот график':'Сохранить и перейти к ВК')+icon('arrow-right');
+    const save=$('#schedule-save-next');save.disabled=saving||window.soloSetup?.busy()||!d;save.innerHTML=(saving?'Сохраняем…':solo()?'Сохранить общий график и перейти к ВК':dirtyDrafts().length>1?'Сохранить этот график':'Сохранить и перейти к ВК')+icon('arrow-right');
     form.elements.resource_id.disabled=saving;
     $$('[data-schedule-kind],#preview-room').forEach(el=>el.disabled=saving);
     $$('#schedule-fields input,#schedule-fields button,#workday-buttons button').forEach(el=>el.disabled=saving);
@@ -152,19 +162,22 @@
   }
   async function saveSchedule(){
     const d=getDraft();if(!d||saving)return;
-    let body;try{body=payload(d);}catch(e){message(e.message,true);return;}
+    let body;try{syncSoloDraft();body=payload(d);}catch(e){message(e.message,true);return;}
+    const common=solo();
     const scope=context(),key=selectedKey;let committed=false;saving=true;message('Сохраняем график…');renderBadges();renderNav();
     try{
-      if(dirty(d))await api('/api/weekly-schedule/batch',{scope,method:'POST',body:JSON.stringify(body)});
+      if(dirty(d)||common&&dirtyDrafts().length)await api(common?'/api/solo-schedule':'/api/weekly-schedule/batch',{scope,method:'POST',body:JSON.stringify(common?{days:body.days,expected_master_id:data.solo_setup.master_id,expected_room_id:data.solo_setup.room_id}:body)});
       if(!isCurrent(scope))return;
       committed=true;
       d.baseline=signature(d.week);message('График сохранён. Существующие записи не изменены.');
+      if(common){const room=drafts.get('room:'+data.solo_setup.room_id);if(room)room.baseline=signature(room.week);}
       await load();if(!isCurrent(scope))return;
       if(!dirtyDrafts().length)selectTab('vk');else message('График сохранён. Остались изменения в других графиках: '+dirtyDrafts().length+'. Выберите их и сохраните.');
     }catch(e){if(isCurrent(scope)&&e.name!=='AbortError'){const ids=e.body?.affected_booking_ids;message(committed?'График сохранён, но обновить данные не удалось. Нажмите «Обновить» в календаре или повторите переход к ВК.':ids?.length?'График не изменён: он конфликтует с записями №'+ids.join(', ')+'. Измените часы или сначала перенесите записи в календаре.':'Сохранение не подтверждено. '+e.message+' Изменения графика остаются на экране; повторное сохранение безопасно.',true);}}
     finally{if(isCurrent(scope)&&selectedKey===key){saving=false;renderBadges();renderNav();queuePreview();}}
   }
   function guardDeparture(action){
+    if(window.soloSetup?.busy()){selectTab('salon');show('Дождитесь результата сохранения режима.');return true;}
     if(saving){selectTab('constructor');selectBuilder('builder-schedule');message('Дождитесь результата сохранения графика.');return true;}
     if(!dirtyDrafts().length)return false;
     pendingDeparture=action;selectTab('constructor');selectBuilder('builder-schedule');

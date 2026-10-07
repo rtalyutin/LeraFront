@@ -14,6 +14,18 @@ The existing login form and session/CSRF contract are retained. The separate **�
 
 ## Admin constructor
 
+### One master and one room
+
+New salon creation asks **Работаю один** or **У меня команда**. The solo choice also asks for the master's name; the stable salon creation key retains that choice during an uncertain creation retry. Once the salon exists, setup creates its sole master/room through one backend command. If that second command fails, the existing salon offers setup retry rather than another salon creation.
+
+Solo mode has three main steps: **О себе → Услуги → Когда принимаю**, followed by VK connection. Active services are assigned automatically to the sole master and room. The weekly editor changes one common schedule; its availability preview submits matching master and room drafts to the existing booking engine. **Добавить мастера или кабинет** opens the full constructor and keeps existing catalog IDs and appointments. The seven-day calendar remains available; resource filters and the sole-master choice in manual booking are hidden in this mode.
+
+Existing salons with at most one active master/room can opt in from **Салон**. Missing service assignments require an explicit acknowledgement; differing weekly hours show both schedules and require choosing the master or room schedule. Dated exceptions and closed intervals remain in force and are noted in the editor. A pending schedule draft must be saved/discarded before changing mode. Several active resources keep the full constructor visible.
+
+The frontend consumes `snapshot.solo_setup` and uses `GET/POST /api/solo-setup` and `POST /api/solo-schedule`. Mutations send the snapshot's `expected_master_id` and `expected_room_id` so a changed sole resource cannot receive stale edits. The common schedule sends all seven `days` and stores both resources atomically. Booking conflicts retain the draft and report affected IDs; this operation never cancels bookings. Uncertain setup retries first read the saved mode and name, recognizing a lost success reply without replaying resource creation. Internal `constructor_mode` metadata is hidden from the generic editor.
+
+Deploy the matching LeraBack version before this frontend. The production image includes `solo.js`. `npm test` includes the shipped solo DOM/API regression scenarios; these use synthetic replies and are separate from SQL/browser acceptance.
+
 The setup workspace follows the approved light interface with a lime accent: a persistent step list, a weekly schedule editor and a client availability preview. The header switches between salons from the authenticated membership list. Services, masters, rooms, additional fields and VK continue to use the existing scoped admin APIs.
 
 In **График работы**, choose a master or room, toggle working weekdays, and edit common intervals. **Разный график по дням** opens each weekday separately; returning to common hours requires matching intervals so different schedules are never silently overwritten. Gaps are breaks, an empty day is closed, and 24:00 is a valid interval end. Resource changes retain separate in-memory drafts. Switching salons, adding a salon or logging out with drafts offers an inline stay/discard choice. Refreshing or closing the browser loses unsaved drafts; no draft is stored in browser storage.

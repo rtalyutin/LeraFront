@@ -4,7 +4,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "node dev-server.mjs",
-    "test": "node test_frontend_contract.cjs && node test_salon_frontend.cjs && node test_vk_frontend.cjs && node test_week_calendar.cjs",
+    "test": "node test_frontend_contract.cjs && node test_salon_frontend.cjs && node test_vk_frontend.cjs && node test_week_calendar.cjs && node test_solo_frontend.cjs",
     "test:constructor": "node test_constructor_dom.cjs"
   },
   "devDependencies": {
